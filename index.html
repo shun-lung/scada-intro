@@ -563,6 +563,84 @@ ushort sp = plc.ReadHoldingRegisters(1, 0, 1)[0];   <span class="cm">// 1152</sp
   <p class="muted">實務上很多工廠為了方便，把所有數字都放在 4 號櫃。所以拿到一台機器，先跟廠商或電控工程師要「點位表」（哪個櫃號是什麼訊號），這是最重要的一份文件。</p>
 </section>
 
+<!-- 4a. 感測器、數位、類比 -->
+<section id="sensor">
+  <div class="eyebrow">最容易搞混的地方</div>
+  <h2>感測器、數位、類比，差在哪？</h2>
+  <p>網路上常看到「1 號櫃：離散輸入，例如感測器訊號」「3 號櫃：輸入暫存器，例如溫度、壓力」。看起來像三種不同的東西，其實是<b>兩個不同的問題</b>，混在一起講才會亂。</p>
+  <div class="two">
+    <div class="panel" style="display:flex;flex-direction:column;gap:6px;min-width:0">
+      <h3>「感測器」回答：它是什麼東西？</h3>
+      <p>感測器＝現場的<b>耳朵</b>，負責把現場的狀況告訴 PLC。所以感測器的訊號<b>一定是「進來」</b>（I），只會放在 1 號或 3 號櫃。</p>
+      <p class="muted" style="font-size:15px">相反的，進水閥、燈、馬達是<b>被命令的</b>（手），是「出去」（O），放 0 號或 4 號櫃。</p>
+    </div>
+    <div class="panel" style="display:flex;flex-direction:column;gap:6px;min-width:0">
+      <h3>「數位／類比」回答：它送來什麼？</h3>
+      <p>只會說<b>「是」或「不是」</b>（門關好了嗎？）＝數位 D。<br>會說<b>「多少」</b>（水有幾公分？）＝類比 A。</p>
+      <p class="muted" style="font-size:15px">感測器兩種都有。同樣是感測器，門的開關是數位，水位計是類比。</p>
+    </div>
+  </div>
+  <div class="panel tbl">
+    <table>
+      <thead><tr><th>洗衣機上的東西</th><th>是感測器嗎？</th><th>送來的是</th><th>訊號</th><th>櫃號</th></tr></thead>
+      <tbody>
+        <tr class="c-di"><td>門關好開關</td><td>是（耳朵）</td><td>是／不是</td><td>DI</td><td><span class="pill">10003</span></td></tr>
+        <tr class="c-di"><td>過熱保護開關</td><td>是（耳朵）</td><td>是／不是</td><td>DI</td><td><span class="pill">10005</span></td></tr>
+        <tr class="c-ai"><td>水位計</td><td>是（耳朵）</td><td>多少（25 cm）</td><td>AI</td><td><span class="pill">30001</span></td></tr>
+        <tr class="c-ai"><td>烘衣溫度計</td><td>是（耳朵）</td><td>多少（75 °C）</td><td>AI</td><td><span class="pill">30003</span></td></tr>
+        <tr class="c-do"><td>進水閥</td><td>不是（手）</td><td>開／關</td><td>DO</td><td><span class="pill">00001</span></td></tr>
+        <tr class="c-ao"><td>滾筒轉速設定</td><td>不是（手）</td><td>多少（50 rpm）</td><td>AO</td><td><span class="pill">40001</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>所以那段網路說明裡的「感測器訊號」，指的是<b>開關型的感測器</b>（門關好、過熱開關）；「溫度、壓力」也是感測器，只是它們送的是「多少」，所以放 3 號櫃。兩句講的都是感測器。</p>
+  <div class="rhyme" style="max-width:620px">
+    <span class="n">感測器口訣</span>
+    <span class="say">感測器是耳朵，只管進來；<br>是不是放 1，多少放 3。</span>
+  </div>
+
+  <div class="panel" style="display:flex;flex-direction:column;gap:10px">
+    <h3>為什麼 1、3 只能讀，0、4 可以寫？</h3>
+    <p>Modbus 官方規格是這樣分的：<b>1、3 號櫃的內容是現場填進來的</b>；<b>0、4 號櫃的內容是程式可以改的</b>。</p>
+    <div class="two">
+      <div class="cell c-ai" style="border-radius:12px;padding:14px 16px;background:color-mix(in srgb, var(--c) 10%, var(--surface));border:1.5px solid color-mix(in srgb, var(--c) 45%, transparent);display:flex;flex-direction:column;gap:4px">
+        <b>1、3：現場說了算 → 只能看</b><span class="muted" style="font-size:15px">水位計量到 25 cm，你在 C# 寫 0，水也不會不見。寫了沒有意義，所以規定不能寫。就像車子的時速表：只能看，不能用手撥。</span></div>
+      <div class="cell c-ao" style="border-radius:12px;padding:14px 16px;background:color-mix(in srgb, var(--c) 10%, var(--surface));border:1.5px solid color-mix(in srgb, var(--c) 45%, transparent);display:flex;flex-direction:column;gap:4px">
+        <b>0、4：程式說了算 → 可以改</b><span class="muted" style="font-size:15px">進水閥要不要開、轉速設多少，是命令，由程式決定。就像車子的定速巡航：可以設 90、也可以改成 100。</span></div>
+    </div>
+  </div>
+
+  <div class="panel" style="display:flex;flex-direction:column;gap:12px">
+    <h3>看到櫃號，3 步寫出 C#</h3>
+    <div class="tbl"><table>
+      <thead><tr><th>步驟</th><th>問自己</th><th>怎麼決定</th></tr></thead>
+      <tbody>
+        <tr><td><b>①</b></td><td>第 1 碼是幾？</td><td>選方法名稱：<span class="mono">0 → Coil</span>、<span class="mono">1 → Inputs</span>、<span class="mono">3 → InputRegisters</span>、<span class="mono">4 → HoldingRegisters</span></td></tr>
+        <tr><td><b>②</b></td><td>要讀還是寫？</td><td>讀就在前面加 <span class="mono">Read</span>；寫就用 <span class="mono">WriteSingle</span>（只有 0、4 能寫）</td></tr>
+        <tr><td><b>③</b></td><td>後 4 碼是第幾格？</td><td>減 1，填在括號第二個位置（第一個是站號 1）</td></tr>
+      </tbody>
+    </table></div>
+    <div class="tbl"><table>
+      <thead><tr><th>題目</th><th>①</th><th>②</th><th>③</th><th>寫出來</th></tr></thead>
+      <tbody>
+        <tr class="c-ao"><td>讀轉速 <span class="mono">40001</span></td><td>4 → HoldingRegisters</td><td>讀</td><td>0001 → 0</td><td class="mono">plc.ReadHoldingRegisters(1, 0, 1)</td></tr>
+        <tr class="c-di"><td>讀開始鍵 <span class="mono">10001</span></td><td>1 → Inputs</td><td>讀</td><td>0001 → 0</td><td class="mono">plc.ReadInputs(1, 0, 1)</td></tr>
+        <tr class="c-do"><td>紅燈亮 <span class="mono">00007</span></td><td>0 → Coil</td><td>寫</td><td>0007 → 6</td><td class="mono">plc.WriteSingleCoil(1, 6, true)</td></tr>
+        <tr class="c-ai"><td>讀烘衣溫度 <span class="mono">30003</span></td><td>3 → InputRegisters</td><td>讀</td><td>0003 → 2</td><td class="mono">plc.ReadInputRegisters(1, 2, 1)</td></tr>
+      </tbody>
+    </table></div>
+    <p><b>反過來，看方法名稱猜櫃子：</b>名字裡有 <span class="mono">Register</span> 的是數字（3、4），沒有的是開關（0、1）；名字裡有 <span class="mono">Input</span> 的是現場進來的（1、3），只能讀。</p>
+    <div class="tbl"><table>
+      <thead><tr><th></th><th>開關（沒有 Register）</th><th>數字（有 Register）</th></tr></thead>
+      <tbody>
+        <tr><td><b>進來，只能讀</b>（有 Input）</td><td class="mono">1xxxx ReadInputs</td><td class="mono">3xxxx ReadInputRegisters</td></tr>
+        <tr><td><b>出去，可以寫</b>（沒有 Input）</td><td class="mono">0xxxx ReadCoils<br>WriteSingleCoil</td><td class="mono">4xxxx ReadHoldingRegisters<br>WriteSingleRegister</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+  <p class="muted">練習：頁尾測驗第 21～30 題專門練這一節。</p>
+</section>
+
 <!-- 4b. C# 括號裡是什麼 -->
 <section id="c-args">
   <div class="eyebrow">看懂 C# 那一行</div>
@@ -810,9 +888,9 @@ ushort dry   = v[2];   <span class="cm">// 30003 烘衣溫度</span></pre>
 <!-- 8. 測試練習 -->
 <section id="quiz">
   <div class="eyebrow">測試練習</div>
-  <h2>20 題小測驗</h2>
-  <p>每題選一個答案，選完馬上看到解答。不計分、不記名，可以一直重來。C# 括號裡的數字怎麼看，可以回頭對照 <a href="#c-args">括號裡的數字是什麼？</a>：哪台、哪格、多少。</p>
-  <div class="quiz-bar"><span>已作答 <b id="qzDone">0</b> / 20　答對 <b id="qzRight">0</b> 題</span><button type="button" id="qzReset">全部重來</button></div>
+  <h2>30 題小測驗</h2>
+  <p>每題選一個答案，選完馬上看到解答。不計分、不記名，可以一直重來。第 21～30 題專門練「感測器、數位、類比」和「看櫃號寫 C#」，觀念在 <a href="#sensor">感測器、數位、類比，差在哪？</a>。C# 括號裡的數字怎麼看，可以回頭對照 <a href="#c-args">括號裡的數字是什麼？</a>：哪台、哪格、多少。</p>
+  <div class="quiz-bar"><span>已作答 <b id="qzDone">0</b> / <span id="qzTotal">30</span>　答對 <b id="qzRight">0</b> 題</span><button type="button" id="qzReset">全部重來</button></div>
   <div class="qz-list" id="qzList"></div>
 </section>
 
@@ -860,7 +938,26 @@ var QUIZ = [
   { q: 'C# 每秒讀心跳 40002，連續 3 秒都是 1529，代表什麼？', code: 'if (hb == lastHb) stuckSeconds++;\nif (stuckSeconds >= 3) ShowOffline();', o: ['一切正常', '連線或 PLC 出問題了', '洗衣機洗好了', '數字太大要歸零'], a: 1,
     e: 'PLC 正常時心跳每秒加 1。數字不動了，代表網路斷了，或 PLC 程式停了。SCADA 畫面要把數值變灰、標「通訊中斷」。' },
   { q: '數字讀不到時，檢查口訣「先通、再讀、後對」的第一步是？', o: ['改 C# 程式', '確認電腦連得到 PLC（例如 nc -vz IP 502）', '換一台 PLC', '重灌電腦'], a: 1,
-    e: '先確認網路通不通；通了再用 Modbux 讀同一格；讀得到了，最後才檢查數字對不對。', r: '先通、再讀、後對' },
+    e: '先確認網路通不通；通了再用 Modbux 讀同一格；讀得到了，最後才檢查數字對不對。', r: '先通、再讀、後對' },  { q: '「門關好」開關也是感測器，它是哪一種訊號？', o: ['DI', 'DO', 'AI', 'AO'], a: 0,
+    e: '感測器是耳朵，一定是「進來」（I）；門只會說「關好了／沒關好」，是開關（D）。所以是 DI，放 1 號櫃 10003。', r: '感測器是耳朵，只管進來；是不是放 1，多少放 3' },
+  { q: '「烘衣溫度計」也是感測器，它是哪一種訊號？', o: ['DI', 'DO', 'AI', 'AO'], a: 2,
+    e: '感測器 → 進來（I）；溫度會說「多少度」，是數字（A）。所以是 AI，放 3 號櫃 30003。同樣是感測器，門開關是 DI，溫度計是 AI。', r: '是不是放 1，多少放 3' },
+  { q: '「感測器」和「數位／類比」是什麼關係？', o: ['感測器是第五種訊號', '感測器一定是類比', '感測器說的是方向（一定是進來），數位／類比說的是內容（是不是／多少）', '數位就是電腦用的，類比就是現場用的'], a: 2,
+    e: '兩個是不同的問題。感測器回答「它是什麼東西」（耳朵 → 進來）；數位／類比回答「它送來的是『是不是』還是『多少』」。所以感測器有數位的、也有類比的。' },
+  { q: '為什麼 C# 不能寫入 30001（水位）？', o: ['數字太大放不下', '水位是現場量到的事實，寫了也不會讓水變多或不見', '要先輸入密碼', '其實可以寫，只是比較慢'], a: 1,
+    e: '1、3 號櫃的內容由現場填進來，就像車子的時速表，只能看不能撥。0、4 號櫃是命令（像定速巡航設定），程式才可以改。', r: '一三只能看，零四可以改' },
+  { q: '想「讀」轉速設定 40001 現在是多少，要用哪一行？', o: ['<code>plc.ReadHoldingRegisters(1, 0, 1)</code>', '<code>plc.ReadHoldingRegisters(1, 1, 1)</code>', '<code>plc.ReadInputRegisters(1, 0, 1)</code>', '<code>plc.ReadHoldingRegisters(1, 40001, 1)</code>'], a: 0,
+    e: '① 第 1 碼 4 → HoldingRegisters；② 讀 → Read；③ 後 4 碼 0001 是第 1 格，減 1 填 0。括號第一個 1 是站號。', r: '說明書從 1 數，程式從 0 數' },
+  { q: '想讀「過熱保護開關 10005」，要用哪一行？', o: ['<code>plc.ReadCoils(1, 4, 1)</code>', '<code>plc.ReadInputs(1, 5, 1)</code>', '<code>plc.ReadInputs(1, 4, 1)</code>', '<code>plc.ReadInputRegisters(1, 4, 1)</code>'], a: 2,
+    e: '① 第 1 碼 1 → Inputs（開關進來）；② 讀；③ 0005 是第 5 格，減 1 填 4。' },
+  { q: '想讀「烘衣溫度 30003」，要用哪一行？', o: ['<code>plc.ReadInputRegisters(1, 2, 1)</code>', '<code>plc.ReadInputs(1, 2, 1)</code>', '<code>plc.ReadHoldingRegisters(1, 2, 1)</code>', '<code>plc.ReadInputRegisters(1, 3, 1)</code>'], a: 0,
+    e: '① 第 1 碼 3 → InputRegisters（數字進來）；② 讀；③ 0003 是第 3 格，減 1 填 2。' },
+  { q: '想把滾筒轉速設成 1152（40001），要用哪一行？', o: ['<code>plc.WriteSingleCoil(1, 0, true)</code>', '<code>plc.WriteSingleRegister(1, 0, 1152)</code>', '<code>plc.WriteSingleRegister(1, 1, 1152)</code>', '<code>plc.WriteSingleRegister(1, 40001, 1152)</code>'], a: 1,
+    e: '① 4 → 數字出去，寫數字用 WriteSingleRegister（Register＝數字）；③ 0001 → 填 0；最後一個是要寫的值 1152。WriteSingleCoil 是寫開關（0 號櫃）。', r: '方法選櫃子，括號：哪台、哪格、多少' },
+  { q: '方法名稱裡有「Register」的（例如 ReadInputRegisters），讀的是哪兩種櫃子？', o: ['0 和 1（開關）', '3 和 4（數字）', '0 和 4（可以寫）', '1 和 3（只能讀）'], a: 1,
+    e: '有 Register 的是數字：InputRegisters＝3 號櫃、HoldingRegisters＝4 號櫃。沒有 Register 的是開關：Coils＝0 號櫃、Inputs＝1 號櫃。', r: '零一開關，三四數字' },
+  { q: '想讓「綠燈 00005」熄掉，要用哪一行？', o: ['<code>plc.WriteSingleCoil(1, 5, false)</code>', '<code>plc.WriteSingleCoil(1, 4, false)</code>', '<code>plc.ReadCoils(1, 4, 1)</code>', '<code>plc.WriteSingleRegister(1, 4, 0)</code>'], a: 1,
+    e: '① 0 → Coil（開關出去）；② 寫 → WriteSingleCoil；③ 0005 是第 5 格，減 1 填 4；false＝關。', r: '零四可以改' },
 ];
 
 // 每一題的 C# 寫法補充（NModbus；plc 是已連線的 Modbus 主站，1 是站號）。答錯自動顯示，答對可點開
@@ -884,7 +981,16 @@ var QCS = [
   '// 常閉：正常是 true，變 false 才是按了停止或斷線\nbool stopOk = plc.ReadInputs(1, 1, 1)[0];   // 10002\nif (!stopOk) ShowStopped();',
   '// 常開讀到 false：可能沒按，也可能線斷了\nbool start = plc.ReadInputs(1, 0, 1)[0];\n// 要分清楚：改用有斷線偵測的模組＋電阻',
   'ushort hb = plc.ReadHoldingRegisters(1, 1, 1)[0];   // 40002\nif (hb == lastHb) stuckSeconds++;\nelse { stuckSeconds = 0; lastHb = hb; }\nif (stuckSeconds >= 3) ShowOffline();   // 畫面變灰',
-  '// 先通：連不上會直接丟例外\nusing var tcp = new TcpClient();\ntcp.Connect("192.168.0.10", 502);\nvar plc = new ModbusFactory().CreateMaster(tcp);\n// 再讀：讀得到再檢查數字對不對',
+  '// 先通：連不上會直接丟例外\nusing var tcp = new TcpClient();\ntcp.Connect("192.168.0.10", 502);\nvar plc = new ModbusFactory().CreateMaster(tcp);\n// 再讀：讀得到再檢查數字對不對',  '// 門關好 10003 → DI → ReadInputs\nbool doorClosed = plc.ReadInputs(1, 2, 1)[0];   // true＝關好',
+  '// 烘衣溫度 30003 → AI → ReadInputRegisters\nushort raw = plc.ReadInputRegisters(1, 2, 1)[0];\ndouble temp = raw / 27648.0 * 150;   // 0～150 °C',
+  '// 都是感測器，但一個讀開關、一個讀數字\nbool door = plc.ReadInputs(1, 2, 1)[0];            // 10003 是不是\nushort dry = plc.ReadInputRegisters(1, 2, 1)[0];   // 30003 多少',
+  '// 3 號櫃只有 Read，沒有 Write 方法\nushort level = plc.ReadInputRegisters(1, 0, 1)[0];   // 可以\n// plc.WriteSingleRegister 只能寫 4 號櫃',
+  '// 40001 → ① 4＝HoldingRegisters ② 讀 ③ 第 1 格→0\nushort sp = plc.ReadHoldingRegisters(1, 0, 1)[0];',
+  '// 10005 → ① 1＝Inputs ② 讀 ③ 第 5 格→4\nbool overheat = plc.ReadInputs(1, 4, 1)[0];   // true＝跳了',
+  '// 30003 → ① 3＝InputRegisters ② 讀 ③ 第 3 格→2\nushort raw = plc.ReadInputRegisters(1, 2, 1)[0];',
+  '// 40001 → ① 4＝Register ② 寫 ③ 第 1 格→0 ④ 值 1152\nplc.WriteSingleRegister(1, 0, 1152);',
+  '// 有 Register → 數字\nplc.ReadInputRegisters(1, 0, 1);     // 3xxxx\nplc.ReadHoldingRegisters(1, 0, 1);   // 4xxxx\n// 沒有 Register → 開關\nplc.ReadInputs(1, 0, 1);             // 1xxxx\nplc.ReadCoils(1, 0, 1);              // 0xxxx',
+  '// 00005 → ① 0＝Coil ② 寫 ③ 第 5 格→4 ④ false＝關\nplc.WriteSingleCoil(1, 4, false);',
 ];
 
 (function () {

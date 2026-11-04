@@ -4,7 +4,7 @@
 
 ## 線上閱讀
 
-- [SCADA 入門圖解](https://shun-lung.github.io/scada-intro/)：置物櫃比喻、口訣、17 點洗衣機、4–20 mA 換算、斷線判斷、20 題測驗
+- [SCADA 入門圖解](https://shun-lung.github.io/scada-intro/)：置物櫃比喻、口訣、17 點洗衣機、感測器／數位／類比、4–20 mA 換算、斷線判斷、30 題測驗
 - [C# 接 PLC 實戰](https://shun-lung.github.io/scada-intro/csharp-plc.html)：點位表對不上怎麼辦、設定畫面、找會動的格子、C# 工程師開工 7 步
 
 ## 範例程式
