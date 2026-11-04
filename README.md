@@ -11,6 +11,8 @@
 
 - `code/washer.st`：OpenPLC 用的洗衣機練習程式（心跳 40002、模擬水位 40003）
 - `code/csharp-test/`：C# 讀 PLC 的練習程式（NModbus），`dotnet run` 執行
+- `code/plc-check/`：工具讀得到、C# 讀不到時用的對照程式（把測試工具的設定照抄到最上面 6 行）
+- `code/fake-plc/`：練習用的假 PLC（洗衣機點位，127.0.0.1:5020，站號 1）。先在一個終端機 `dotnet run` 它，再把 plc-check 的 IP 改 127.0.0.1、Port 改 5020 來練習各種錯誤
 
 ## 說明
 

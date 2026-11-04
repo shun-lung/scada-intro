@@ -116,6 +116,8 @@ pre.code .cm { color: var(--muted); }
 figure.shot { margin: 0; display: flex; flex-direction: column; gap: 8px; }
 figure.shot img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 10px; }
 figure.shot figcaption { font-size: 15px; }
+.mist { display: flex; flex-direction: column; gap: 12px; }
+.mist .panel > b { font-size: 16px; }
 .copybox { display: flex; flex-direction: column; gap: 8px; }
 .copybox textarea { width: 100%; box-sizing: border-box; min-height: 230px; font: 14px/1.7 var(--f-body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; resize: vertical; }
 .copybox button { align-self: flex-start; font: inherit; font-size: 14px; color: var(--surface); background: var(--accent); border: none; border-radius: 8px; padding: 8px 16px; cursor: pointer; }
@@ -272,9 +274,199 @@ figure.shot figcaption { font-size: 15px; }
         <div class="reg"><small>30010</small><b>0</b></div>
       </div>
       <p style="font-size:14px">現場一邊加水，30001 一直是 0，<b>30003 卻跟著上升</b>。這就證明點位表過期了，水位其實在 30003。</p>
-      <div class="callout" style="border-color:var(--accent);background:color-mix(in srgb, var(--accent) 6%, var(--surface))"><b style="color:var(--accent)">為什麼先用工具</b><span>工具讀得到、C# 讀不到，是你的程式問題；工具也讀不到，是 PLC 或文件的問題。先用工具，就不會在錯的地方找半天。</span></div>
+      <div class="callout" style="border-color:var(--accent);background:color-mix(in srgb, var(--accent) 6%, var(--surface))"><b style="color:var(--accent)">為什麼先用工具</b><span>工具讀得到、C# 讀不到，是你的程式問題；工具也讀不到，是 PLC 或文件的問題。先用工具，就不會在錯的地方找半天。<a href="#tool-ok">工具讀得到、C# 讀不到怎麼辦 →</a></span></div>
     </div>
   </div>
+</section>
+
+<!-- 2a. 工具讀得到、C# 讀不到 -->
+<section id="tool-ok">
+  <div class="eyebrow">工具讀得到，C# 讀不到</div>
+  <h2>把工具的設定，一格一格抄進 C#</h2>
+  <p>工具讀得到，代表 PLC、網路、點位都沒問題。問題只在你的程式「問的方式」跟工具不一樣。所以解法很單純：<b>工具上每一個欄位，在 C# 裡都有一個對應的位置</b>，一格一格對過去，哪裡不一樣就是哪裡錯。</p>
+  <div class="panel tbl"><table>
+    <thead><tr><th>工具上的欄位（畫面 D）</th><th>C# 放在哪裡</th><th>抄錯了會看到</th></tr></thead>
+    <tbody>
+      <tr><td>IP 位址 <span class="mono">192.168.0.10</span></td><td class="mono">new TcpClient(<b>ip</b>, port)</td><td>2 秒連不上</td></tr>
+      <tr><td>Port <span class="mono">502</span></td><td class="mono">new TcpClient(ip, <b>port</b>)</td><td>連線被拒絕</td></tr>
+      <tr><td>站號 <span class="mono">1</span></td><td>括號第 1 個</td><td>連得上，但等 2 秒沒回答</td></tr>
+      <tr><td>要讀的櫃子 <span class="mono">3xxxx</span></td><td>方法名稱 <span class="mono">ReadInputRegisters</span></td><td><b class="bad">不報錯</b>，但讀到別櫃的數字</td></tr>
+      <tr><td>起始位址 <span class="mono">0</span></td><td>括號第 2 個</td><td>讀到隔壁格，或例外碼 2</td></tr>
+      <tr><td>讀幾格 <span class="mono">10</span></td><td>括號第 3 個</td><td>超過 PLC 有的格子，例外碼 2</td></tr>
+      <tr><td>顯示格式（有正負號、小數）</td><td>你自己的換算</td><td>65535、16842 這類怪數字</td></tr>
+    </tbody>
+  </table></div>
+  <div class="rhyme">
+    <span class="n">對照口訣</span>
+    <span class="say">工具怎麼填，C# 就怎麼抄。</span>
+  </div>
+
+  <h3>完整範例：對照用的 C# 程式</h3>
+  <p>最上面 6 行就是工具的 6 個欄位，照抄就好。它會把讀到的每一格印出來，出錯時也會告訴你是哪一種錯。專案要先裝 NModbus：<code>dotnet add package NModbus</code>。</p>
+  <div class="lbl">
+    <div class="sub">① 測試工具怎麼填，這裡就怎麼抄</div>
+    <div><code>string ip = "192.168.0.10";</code><span>工具的 IP 位址。</span></div>
+    <div><code>int port = 502;</code><span>工具的 Port。Modbus TCP 幾乎都是 502。</span></div>
+    <div><code>byte unitId = 1;</code><span>工具的站號。<br><span class="muted">byte＝0～255 的小整數，站號剛好用這個</span></span></div>
+    <div><code>int kind = 3;</code><span>工具選的櫃子：0、1、3 或 4。</span></div>
+    <div><code>ushort start = 0;</code><span>工具的起始位址。工具若是從 0 數就照抄；30001 → 0。</span></div>
+    <div><code>ushort count = 3;</code><span>讀幾格。</span></div>
+    <div class="sub">② 連線：2 秒連不上就放棄</div>
+    <div><code>using var tcp = new TcpClient();</code><span>準備一條網路連線，程式結束自動關掉。</span></div>
+    <div><code>try</code><span>試著連線，出錯跳到 catch。</span></div>
+    <div><code>{</code><span></span></div>
+    <div><code>  if (!tcp.ConnectAsync(ip, port).Wait(2000))</code><span>開始連線，最多等 2000 毫秒（2 秒）。等不到就是「沒連上」。<br><span class="muted">!＝相反；Wait(2000) 等到了回 true，等不到回 false</span></span></div>
+    <div><code>  {</code><span></span></div>
+    <div><code>    Console.WriteLine("✗ 2 秒連不上：IP 不對或網路不通");</code><span>IP 抄錯、網路線沒接、PLC 沒開，都是這個。</span></div>
+    <div><code>    return;</code><span>直接結束程式，後面不用做了。</span></div>
+    <div><code>  }</code><span></span></div>
+    <div><code>}</code><span></span></div>
+    <div><code>catch (AggregateException)</code><span>對方馬上回「不接」。<br><span class="muted">AggregateException＝連線過程丟出來的錯誤，包了一層</span></span></div>
+    <div><code>{</code><span></span></div>
+    <div><code>  Console.WriteLine("✗ 連線被拒絕：Port 不對，或 PLC 不接受更多連線");</code><span>Port 抄錯；或是 PLC 同時只接受少數連線，測試工具還連著。</span></div>
+    <div><code>  return;</code><span></span></div>
+    <div><code>}</code><span></span></div>
+    <div><code>var plc = new ModbusFactory().CreateMaster(tcp);</code><span>建立主站，之後用 plc 讀寫。</span></div>
+    <div><code>plc.Transport.ReadTimeout = 2000;</code><span>問了 2 秒沒回答就算失敗。</span></div>
+    <div><code>plc.Transport.Retries = 0;</code><span>失敗不要自己重試，馬上告訴我們。<br><span class="muted">預設會重試好幾次，等很久才報錯</span></span></div>
+    <div class="sub">③ 照櫃子種類選方法，讀回來一格一格印</div>
+    <div><code>try</code><span></span></div>
+    <div><code>{</code><span></span></div>
+    <div><code>  if (kind == 0 || kind == 1)</code><span>如果是 0 或 1 號櫃（開關）……<br><span class="muted">||＝或者</span></span></div>
+    <div><code>  {</code><span></span></div>
+    <div><code>    bool[] bits = kind == 0</code><span>讀回來是一排 true／false。</span></div>
+    <div><code>      ? plc.ReadCoils(unitId, start, count)</code><span>0 號櫃用 ReadCoils，</span></div>
+    <div><code>      : plc.ReadInputs(unitId, start, count);</code><span>1 號櫃用 ReadInputs。<br><span class="muted">? :＝「如果……就……否則……」</span></span></div>
+    <div><code>    for (int i = 0; i &lt; bits.Length; i++)</code><span>一格一格印。</span></div>
+    <div><code>      Console.WriteLine($"{kind * 10000 + start + i + 1:00000}  {bits[i]}");</code><span>把位址換回櫃號再印，例如「10001  True」，方便跟工具對照。<br><span class="muted">:00000＝補滿 5 位數，0 號櫃才印得出 00001</span></span></div>
+    <div><code>  }</code><span></span></div>
+    <div><code>  else</code><span>否則就是 3 或 4 號櫃（數字）……</span></div>
+    <div><code>  {</code><span></span></div>
+    <div><code>    ushort[] regs = kind == 3</code><span>讀回來是一排 0～65535 的數字。</span></div>
+    <div><code>      ? plc.ReadInputRegisters(unitId, start, count)</code><span>3 號櫃用 ReadInputRegisters，</span></div>
+    <div><code>      : plc.ReadHoldingRegisters(unitId, start, count);</code><span>4 號櫃用 ReadHoldingRegisters。</span></div>
+    <div><code>    for (int i = 0; i &lt; regs.Length; i++)</code><span>一格一格印。</span></div>
+    <div><code>      Console.WriteLine($"{kind * 10000 + start + i + 1}  原始 {regs[i],5}  有正負號 {(short)regs[i],6}");</code><span>同一個數字印兩種看法：原始的，和「有正負號」的。工具顯示 −1、C# 顯示 65535 時，一眼就看得出來。<br><span class="muted">(short)＝當成有正負號的數字看；,5＝佔 5 格寬，對齊用</span></span></div>
+    <div><code>  }</code><span></span></div>
+    <div><code>}</code><span></span></div>
+    <div class="sub">④ 出錯時，說清楚是哪一種錯</div>
+    <div><code>catch (SlaveException ex)</code><span>PLC 有回答，但說「不行」。</span></div>
+    <div><code>{</code><span></span></div>
+    <div><code>  Console.WriteLine($"✗ PLC 回答「不行」，例外碼 {ex.SlaveExceptionCode}");</code><span>印出例外碼。</span></div>
+    <div><code>  Console.WriteLine("  碼 2：這一格不存在 → 對照工具的櫃子種類和起始位址");</code><span>最常見。位址填成 30001、或讀太多格。</span></div>
+    <div><code>  Console.WriteLine("  碼 1：不支援這個動作 → 櫃子種類選錯，或這一櫃不能寫");</code><span>例如想寫 3 號櫃。</span></div>
+    <div><code>}</code><span></span></div>
+    <div><code>catch (Exception ex)</code><span>其他錯誤：連得上，卻等不到回答。</span></div>
+    <div><code>{</code><span></span></div>
+    <div><code>  Console.WriteLine($"✗ PLC 沒回答：{ex.GetType().Name}");</code><span>印出錯誤種類（通常是 IOException）。</span></div>
+    <div><code>  Console.WriteLine("  連得上卻沒回答 → 站號跟工具不一樣");</code><span>PLC 只回答叫到自己站號的問題，站號錯了它就不理你。</span></div>
+    <div><code>}</code><span></span></div>
+  </div>
+  <p>照工具抄對時，印出來會長這樣，跟畫面 D 的工具一格一格對得上：</p>
+<pre class="code">30001  原始     0  有正負號      0
+30002  原始  8294  有正負號   8294
+30003  原始 13824  有正負號  13824</pre>
+  <p class="muted" style="font-size:14px">本節所有輸出都是實際執行的結果：我在這台 Mac 上用 C# 寫了一台假 PLC（放洗衣機的點位），再把下面每一種錯誤故意做一次。測試時 IP 用 127.0.0.1、Port 用 5020，其他照上面。</p>
+
+  <h3>最常見的 8 種「抄錯」</h3>
+  <div class="mist">
+    <div class="panel">
+      <b>1. 位址填成櫃號</b>
+      <p class="muted" style="font-size:14px">工具：起始位址 <span class="mono">0</span>，讀得到。C#：</p>
+<pre class="code"><span class="cm">// 錯：把 30001 整個填進去</span>
+plc.ReadInputRegisters(1, 30001, 1);
+<span class="cm">// ✗ PLC 回答「不行」，例外碼 2</span>
+
+<span class="cm">// 對：櫃子由方法決定，括號只填第幾格（從 0 數）</span>
+plc.ReadInputRegisters(1, 0, 1);</pre>
+    </div>
+    <div class="panel">
+      <b>2. 位址差一格</b>
+      <p class="muted" style="font-size:14px">工具：30001 是 0。C# 卻讀到 8294，那其實是隔壁 30002 水溫。</p>
+<pre class="code"><span class="cm">// 錯：30001 填成 1（忘了從 0 數）</span>
+plc.ReadInputRegisters(1, 1, 1);   <span class="cm">// 8294＝30002</span>
+
+<span class="cm">// 對</span>
+plc.ReadInputRegisters(1, 0, 1);   <span class="cm">// 0＝30001</span></pre>
+      <p style="font-size:14px">有些工具是從 1 數。先看工具的欄位旁邊寫「從 0」還是「從 1」，再決定要不要減 1。</p>
+    </div>
+    <div class="panel">
+      <b>3. 櫃子種類用錯（最危險：不會報錯）</b>
+      <p class="muted" style="font-size:14px">工具選 3xxxx，讀到 0、8294、13824。C# 用了 4 號櫃的方法：</p>
+<pre class="code"><span class="cm">// 錯：3 號櫃的東西，用讀 4 號櫃的方法</span>
+plc.ReadHoldingRegisters(1, 0, 3);
+<span class="cm">// 40001  1152  ← 這是轉速，不是水位</span>
+<span class="cm">// 40002    17  ← 這是心跳</span>
+
+<span class="cm">// 對</span>
+plc.ReadInputRegisters(1, 0, 3);</pre>
+      <p style="font-size:14px">開關也一樣：開始鍵 10001 用 <span class="mono">ReadInputs</span> 讀到 <span class="mono">True</span>；誤用 <span class="mono">ReadCoils</span> 讀到的是 00001 進水閥的 <span class="mono">False</span>。程式不會報錯，只會讀到「另一個東西」。</p>
+    </div>
+    <div class="panel">
+      <b>4. 站號不一樣</b>
+      <p class="muted" style="font-size:14px">工具：站號 1。C# 寫成 0 或 2：</p>
+<pre class="code">plc.ReadInputRegisters(0, 0, 1);
+<span class="cm">// （等 2 秒）✗ PLC 沒回答：IOException</span>
+
+<span class="cm">// 對：跟工具一樣</span>
+plc.ReadInputRegisters(1, 0, 1);</pre>
+      <p style="font-size:14px">網路是通的，但 PLC 只回答叫到自己的問題。<b>連得上卻等很久</b>，第一個就查站號。</p>
+    </div>
+    <div class="panel">
+      <b>5. IP、Port 抄錯，或工具還連著</b>
+<pre class="code"><span class="cm">// IP 錯</span>
+✗ 2 秒連不上：IP 不對或網路不通
+<span class="cm">// Port 錯</span>
+✗ 連線被拒絕：Port 不對，或 PLC 不接受更多連線</pre>
+      <p style="font-size:14px">IP、Port 都對還是被拒絕：有些 PLC 同時只接受很少的連線。<b>先把測試工具斷線</b>，再跑 C#。</p>
+    </div>
+    <div class="panel">
+      <b>6. 換算永遠是 0</b>
+      <p class="muted" style="font-size:14px">工具讀到 13824，C# 也讀到 13824，換算後卻是 0：</p>
+<pre class="code"><span class="cm">// 錯：整數 ÷ 整數，小數被丟掉</span>
+double cm = raw / 27648 * 50;     <span class="cm">// 0</span>
+
+<span class="cm">// 對：寫 27648.0</span>
+double cm = raw / 27648.0 * 50;   <span class="cm">// 25</span></pre>
+    </div>
+    <div class="panel">
+      <b>7. 工具顯示 −1，C# 顯示 65535</b>
+      <p class="muted" style="font-size:14px">工具的顯示格式設成「有正負號（Signed）」，C# 的 ushort 沒有負數：</p>
+<pre class="code">ushort raw = plc.ReadHoldingRegisters(1, 4, 1)[0];
+<span class="cm">// raw = 65535</span>
+
+<span class="cm">// 對：當成有正負號的數字看</span>
+short value = (short)raw;   <span class="cm">// -1</span></pre>
+      <p style="font-size:14px">溫度可能是負的、或「差值」這類數字，都要問 PLC 工程師：這一格有沒有正負號？</p>
+    </div>
+    <div class="panel">
+      <b>8. 工具顯示 25.3，C# 顯示兩個怪數字</b>
+      <p class="muted" style="font-size:14px">工具的格式設成「小數（Float）」，一個小數佔 2 格：</p>
+<pre class="code">ushort[] r = plc.ReadHoldingRegisters(1, 5, 2);
+<span class="cm">// r[0] = 16842，r[1] = 26214（分開看沒意義）</span>
+
+<span class="cm">// 對：兩格合起來，前一格在前</span>
+uint both = ((uint)r[0] &lt;&lt; 16) | r[1];
+float value = BitConverter.Int32BitsToSingle((int)both);
+<span class="cm">// 25.3</span></pre>
+      <p style="font-size:14px">如果算出來是 2.7E+23 這種天文數字，就是兩格順序反了：把 <span class="mono">r[0]</span> 和 <span class="mono">r[1]</span> 對調。<br><span class="muted">&lt;&lt; 16＝往前推 16 位，讓前一格變成「高位」；|＝把兩半拼起來</span></p>
+    </div>
+  </div>
+
+  <h3>看到什麼，先查哪一格</h3>
+  <div class="panel tbl"><table>
+    <thead><tr><th>C# 看到</th><th>先對照工具的</th></tr></thead>
+    <tbody>
+      <tr><td>2 秒連不上</td><td>IP</td></tr>
+      <tr><td>連線被拒絕</td><td>Port；工具是不是還連著</td></tr>
+      <tr><td>連得上，等 2 秒沒回答</td><td>站號</td></tr>
+      <tr><td>例外碼 2</td><td>起始位址（有沒有填成櫃號）、讀幾格</td></tr>
+      <tr><td>沒報錯，數字跟工具不一樣</td><td>櫃子種類（方法名稱）、位址差一格</td></tr>
+      <tr><td>數字一樣，但顯示怪</td><td>工具的顯示格式：有正負號？小數？</td></tr>
+      <tr><td>換算後是 0</td><td>你的公式：27648 要寫 27648.0</td></tr>
+    </tbody>
+  </table></div>
+  <p class="muted">完整程式碼（含練習用的假 PLC）放在網站的 <span class="mono">code/plc-check</span> 和 <span class="mono">code/fake-plc</span> 資料夾。</p>
 </section>
 
 <!-- 2b. 真實軟體 -->
