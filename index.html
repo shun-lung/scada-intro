@@ -1,0 +1,972 @@
+<!doctype html>
+<html lang="zh-Hant">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SCADA 入門圖解</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@400;700&family=Noto+Sans+TC:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* 版面：單欄閱讀，像一本操作手冊；四種訊號各有固定顏色，全頁一致 */
+:root {
+  --bg: #f2f4f3; --surface: #ffffff; --ink: #17201c; --muted: #56635d; --line: #cdd6d1;
+  --accent: #0f6b5c;
+  --di: #2b8a4b; --do: #b9720c; --ai: #2a68ad; --ao: #8648b4; --bad: #c0392b;
+  --f-hand: "LXGW WenKai TC", "Kaiti TC", "STKaiti", serif;
+  --f-body: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #111614; --surface: #1a221f; --ink: #e5ebe8; --muted: #9caaa3; --line: #34413b;
+  --accent: #4fc3ad; --di: #5cc47c; --do: #e8a43c; --ai: #6ea8ec; --ao: #bb8ce2; --bad: #ef6b5b; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #111614; --surface: #1a221f; --ink: #e5ebe8; --muted: #9caaa3; --line: #34413b;
+  --accent: #4fc3ad; --di: #5cc47c; --do: #e8a43c; --ai: #6ea8ec; --ao: #bb8ce2; --bad: #ef6b5b; color-scheme: dark }
+
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 16px; line-height: 1.75; }
+.wrap { max-width: 920px; margin: 0 auto; padding-block: 40px 80px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: 56px; }
+h1, h2, h3 { text-wrap: balance; line-height: 1.35; margin: 0; }
+h1 { font-family: var(--f-hand); font-size: clamp(30px, 5vw, 44px); }
+h2 { font-family: var(--f-hand); font-size: clamp(24px, 3.6vw, 30px); }
+h3 { font-size: 17px; }
+p { margin: 0; max-width: 65ch; }
+.lead { color: var(--muted); font-size: 17px; }
+section { display: flex; flex-direction: column; gap: 18px; }
+.eyebrow { font-size: 13px; letter-spacing: .12em; color: var(--accent); font-weight: 700; }
+.mono { font-family: var(--f-mono); }
+.muted { color: var(--muted); }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 20px; }
+.diagram { overflow-x: auto; }
+.diagram svg { display: block; min-width: 760px; width: 100%; height: auto; }
+svg text { font-family: var(--f-body); fill: var(--ink); }
+svg .t-muted { fill: var(--muted); }
+svg .t-hand { font-family: var(--f-hand); }
+svg .box { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; }
+svg .plc { fill: color-mix(in srgb, var(--accent) 7%, var(--surface)); stroke: var(--accent); stroke-width: 2; }
+svg .wire { stroke: var(--muted); stroke-width: 2; fill: none; }
+svg .net { stroke: var(--accent); stroke-width: 4; fill: none; stroke-dasharray: 10 6; }
+svg .head { fill: var(--muted); }
+svg .head-a { fill: var(--accent); }
+.c-di { --c: var(--di); } .c-do { --c: var(--do); } .c-ai { --c: var(--ai); } .c-ao { --c: var(--ao); } .c-hb { --c: var(--accent); }
+pre.code { margin: 0; font-family: var(--f-mono); font-size: 14px; line-height: 1.6; background: color-mix(in srgb, var(--ink) 6%, var(--surface));
+  border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; overflow-x: auto; white-space: pre; }
+pre.code .cm { color: var(--muted); }
+
+/* C# 括號拆解：四塊各一個顏色 */
+.argline { font-size: clamp(18px, 3.4vw, 26px); overflow-x: auto; white-space: nowrap; padding: 8px 0; }
+.ar { border-radius: 6px; padding: 2px 6px; font-weight: 700; }
+.argkey { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.ak { border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 4px; min-width: 0; border: 1.5px solid; }
+.ak b { font-family: var(--f-mono); font-size: 15px; overflow-wrap: anywhere; }
+.ak span { font-size: 14px; color: var(--muted); }
+.a0 { --c: var(--accent); } .a1 { --c: var(--do); } .a2 { --c: var(--ai); } .a3 { --c: var(--di); }
+.ar.a0, .ar.a1, .ar.a2, .ar.a3 { color: var(--c); background: color-mix(in srgb, var(--c) 14%, var(--surface)); }
+.ak.a0, .ak.a1, .ak.a2, .ak.a3 { border-color: color-mix(in srgb, var(--c) 50%, transparent); background: color-mix(in srgb, var(--c) 7%, var(--surface)); }
+.ak b { color: var(--c); }
+@media (max-width: 760px) { .argkey { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.rulers { display: flex; flex-direction: column; gap: 22px; padding: 6px 4px 14px; }
+.rl { display: grid; grid-template-columns: 76px minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 12px; position: relative; }
+.rl .rn { grid-row: 1 / 3; align-self: center; font-size: 14px; font-weight: 700; }
+.rl .bar { position: relative; height: 12px; border-radius: 6px; background: color-mix(in srgb, var(--c) 35%, var(--surface)); }
+.rl .bar i { position: absolute; top: -6px; width: 4px; height: 24px; margin-left: -2px; border-radius: 2px; background: var(--c); }
+.rl .re, .rl .rm, .rl .rx { grid-column: 2; grid-row: 2; font-family: var(--f-mono); font-size: 13px; margin-top: 4px; }
+.rl .rm { justify-self: center; font-weight: 700; } .rl .rx { justify-self: end; }
+/* 一行程式、一句白話 */
+.lbl { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.lbl > div { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 14px; padding: 10px 14px; border-top: 1px solid var(--line); align-items: start; }
+.lbl > div:first-child { border-top: none; }
+.lbl code { display: block; font-size: 13.5px; background: none; padding: 0; word-break: normal; overflow-wrap: anywhere; color: var(--ink); }
+.lbl > div > span { font-size: 15px; }
+.lbl .muted { font-size: 13.5px; }
+@media (max-width: 640px) { .lbl > div { grid-template-columns: minmax(0, 1fr); gap: 4px; } }
+.cnt { overflow-x: auto; display: flex; flex-direction: column; gap: 4px; }
+.cnt div { display: grid; grid-template-columns: repeat(7, minmax(44px, 1fr)); gap: 4px; }
+.cnt span { text-align: center; font-size: 13px; padding: 6px 2px; border-radius: 6px; background: var(--bg); border: 1px solid var(--line); }
+.cnt div:last-child span { font-family: var(--f-mono); font-size: 15px; font-weight: 700; }
+.cnt .hit { border-color: var(--ai); background: color-mix(in srgb, var(--ai) 16%, var(--surface)); color: var(--ai); }
+
+/* 測試練習 */
+.quiz-bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; font-size: 15px; }
+.quiz-bar b { font-variant-numeric: tabular-nums; }
+.quiz-bar button, .qz .opt { font: inherit; color: var(--ink); cursor: pointer; }
+.quiz-bar button { background: none; border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; }
+.qz-list { display: flex; flex-direction: column; gap: 14px; }
+.qz { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.qz .qn { font-size: 13px; color: var(--accent); font-weight: 700; letter-spacing: .06em; }
+.qz .qt { font-weight: 700; font-size: 16px; }
+.qz .opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.qz .opt { text-align: left; background: var(--bg); border: 1.5px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 15px; min-width: 0; overflow-wrap: anywhere; }
+.qz .opt code { background: none; padding: 0; }
+.qz .opt:hover:not([disabled]) { border-color: var(--accent); }
+.qz .opt:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.qz .opt[disabled] { cursor: default; }
+.qz .opt.right { border-color: var(--di); background: color-mix(in srgb, var(--di) 14%, var(--surface)); }
+.qz .opt.wrong { border-color: var(--bad); background: color-mix(in srgb, var(--bad) 12%, var(--surface)); }
+.qz .ans { border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; font-size: 15px; display: flex; flex-direction: column; gap: 8px; }
+.qz .ans .verdict-t { font-weight: 700; }
+.qz .ans .verdict-t.ok { color: var(--di); } .qz .ans .verdict-t.no { color: var(--bad); }
+.qz .tagr { display: inline-block; font-size: 13px; font-weight: 700; color: var(--do); border: 1px solid var(--do); border-radius: 99px; padding: 0 8px; margin-right: 6px; }
+@media (max-width: 640px) { .qz .opts { grid-template-columns: minmax(0, 1fr); } }
+svg .locker { fill: color-mix(in srgb, var(--c) 14%, var(--surface)); stroke: var(--c); stroke-width: 2; }
+svg .tag { fill: var(--c); }
+svg .tag-t { fill: var(--surface); font-weight: 700; font-family: var(--f-mono); }
+svg .c-text { fill: var(--c); font-weight: 700; }
+svg .wave { stroke: var(--c); stroke-width: 3; fill: none; stroke-linejoin: round; }
+svg .cable { stroke: var(--line); stroke-width: 10; stroke-linecap: round; }
+svg .mod { fill: var(--surface); stroke: var(--ink); stroke-width: 1.5; }
+
+/* 口訣卡 */
+.rhymes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.rhyme { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.rhyme .say { font-family: var(--f-hand); font-size: 26px; line-height: 1.5; font-weight: 700; }
+.rhyme .n { font-size: 13px; color: var(--muted); letter-spacing: .08em; }
+.k { color: var(--c); }
+
+/* 四種訊號表 */
+.sig { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.sig .cell { border-radius: 12px; padding: 16px 18px; background: color-mix(in srgb, var(--c) 10%, var(--surface)); border: 1.5px solid color-mix(in srgb, var(--c) 45%, transparent); display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.sig .code { font-family: var(--f-mono); font-size: 22px; color: var(--c); }
+.sig .what { font-weight: 700; }
+.sig .eg { color: var(--muted); font-size: 15px; }
+.axis { display: grid; grid-template-columns: 90px repeat(2, minmax(0, 1fr)); gap: 12px; align-items: stretch; }
+.axis .lab { font-size: 14px; color: var(--muted); display: flex; align-items: center; justify-content: center; text-align: center; }
+.axis .top { font-size: 14px; color: var(--muted); text-align: center; }
+
+/* 置物櫃表 */
+table { border-collapse: collapse; width: 100%; font-size: 15px; }
+.tbl { overflow-x: auto; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 13px; color: var(--muted); font-weight: 500; letter-spacing: .05em; }
+td .pill { display: inline-block; font-family: var(--f-mono); font-size: 13px; padding: 1px 8px; border-radius: 99px; color: var(--surface); background: var(--c); }
+
+/* 換算小實驗 */
+.lab-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.meter { border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.meter .v { font-family: var(--f-mono); font-size: 26px; font-variant-numeric: tabular-nums; }
+.meter .s { font-size: 13px; color: var(--muted); }
+input[type=range] { width: 100%; accent-color: var(--ai); }
+.status { display: inline-block; font-size: 13px; padding: 2px 10px; border-radius: 99px; font-weight: 700; }
+.status.ok { background: color-mix(in srgb, var(--di) 18%, var(--surface)); color: var(--di); }
+.status.bad { background: color-mix(in srgb, var(--bad) 18%, var(--surface)); color: var(--bad); }
+
+/* 學習路線 */
+.path { display: flex; flex-direction: column; gap: 0; }
+.stage { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 16px; }
+.stage .rail { display: flex; flex-direction: column; align-items: center; }
+.stage .dot { width: 40px; height: 40px; border-radius: 50%; background: var(--accent); color: var(--surface); display: grid; place-items: center; font-weight: 700; font-family: var(--f-mono); flex: none; }
+.stage .line { flex: 1; width: 2px; background: var(--line); margin-block: 4px; }
+.stage .body { padding-bottom: 28px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.stage .when { font-size: 13px; color: var(--muted); }
+.tools { display: flex; flex-wrap: wrap; gap: 8px; }
+.tool { font-size: 14px; border: 1px solid var(--line); border-radius: 8px; padding: 4px 10px; background: var(--surface); }
+.tool b { font-weight: 700; }
+.tool .new { font-size: 11px; color: var(--surface); background: var(--accent); border-radius: 4px; padding: 0 5px; margin-left: 6px; vertical-align: 2px; }
+.goal { font-size: 15px; }
+.goal::before { content: "做到這樣就過關："; color: var(--accent); font-weight: 700; }
+.stage.later .dot { background: var(--line); color: var(--muted); }
+
+/* 檢查三問 */
+.checks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.check { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.check .q { font-family: var(--f-hand); font-size: 22px; font-weight: 700; }
+.check ul { margin: 0; padding-left: 1.2em; font-size: 15px; }
+code { font-family: var(--f-mono); font-size: .92em; background: color-mix(in srgb, var(--accent) 10%, var(--surface)); padding: 1px 6px; border-radius: 4px; word-break: break-all; }
+
+/* 洗衣順序表、燈號 */
+.seq th, .seq td { text-align: center; white-space: nowrap; }
+.seq th:first-child, .seq td:first-child, .seq th:last-child, .seq td:last-child { text-align: left; white-space: normal; }
+.seq .on { font-weight: 700; color: var(--c); }
+.seq .off { color: var(--muted); opacity: .5; }
+.seq tr.now td { background: color-mix(in srgb, var(--accent) 9%, var(--surface)); }
+.lamp { display: inline-block; width: 12px; height: 12px; border-radius: 50%; vertical-align: -1px; margin-right: 4px; }
+.lamp.g { background: var(--di); } .lamp.y { background: var(--do); } .lamp.r { background: var(--bad); }
+.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 640px) { .two { grid-template-columns: minmax(0, 1fr); } }
+
+/* 斷線判斷 */
+.wires { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.wire-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.wire-card svg { width: 100%; height: auto; display: block; }
+.wire-card table { font-size: 14px; }
+.wire-card td, .wire-card th { padding: 6px 6px; }
+.verdict { font-size: 14px; font-weight: 700; padding: 8px 10px; border-radius: 8px; }
+.verdict.no { color: var(--bad); background: color-mix(in srgb, var(--bad) 12%, var(--surface)); }
+.verdict.ok { color: var(--di); background: color-mix(in srgb, var(--di) 12%, var(--surface)); }
+svg .sch { stroke: var(--ink); stroke-width: 2; fill: none; stroke-linecap: round; }
+svg .sch-dot { fill: var(--ink); }
+svg .sch-r { stroke: var(--ai); stroke-width: 2; fill: none; }
+.more { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 760px) { .wires, .more { grid-template-columns: minmax(0, 1fr); } }
+
+.skip { border-left: 3px solid var(--line); padding-left: 16px; color: var(--muted); }
+
+@media (max-width: 640px) {
+  .sig { grid-template-columns: minmax(0, 1fr); }
+  .axis { grid-template-columns: minmax(0, 1fr); }
+  .axis .lab, .axis .top { display: none; }
+  .checks { grid-template-columns: minmax(0, 1fr); }
+}
+</style>
+
+<div class="wrap">
+
+<header style="display:flex;flex-direction:column;gap:12px">
+  <div class="eyebrow">給會 C#、但不是電機也不是資工的人</div>
+  <h1>SCADA 入門圖解</h1>
+  <p class="lead">先記住一句話：PLC 就是一排有編號的置物櫃。現場的訊號是電線上看不到的電，PLC 的模組把電翻譯成數字放進櫃子，你的 C# 程式照櫃號去拿數字。前期完全不用碰電線。</p>
+</header>
+
+<!-- 0. 洗衣機怎麼運作 -->
+<section>
+  <div class="eyebrow">整頁都用這台機器當例子</div>
+  <h2>一台洗脫烘洗衣機怎麼運作</h2>
+  <p>按下開始後，洗衣機照順序跑：<b>洗 → 脫 → 烘</b>，洗完和脫水中間會多一次漂清。每一步就是把幾個設備打開或關掉，條件到了就換下一步。</p>
+  <div class="panel tbl">
+    <table class="seq">
+      <thead><tr><th>步驟</th><th>進水閥<br><span class="mono">00001</span></th><th>排水泵<br><span class="mono">00002</span></th><th>加熱器<br><span class="mono">00004</span></th><th>滾筒轉速<br><span class="mono">40001</span></th><th>燈／聲音</th><th>什麼時候換下一步</th></tr></thead>
+      <tbody>
+        <tr><td>1 準備</td><td class="off">關</td><td class="off">關</td><td class="off">關</td><td class="off">0</td><td><span class="lamp g"></span>綠</td><td>門關好（10003＝1）→ 鎖門 → 門已鎖（10004＝1）</td></tr>
+        <tr><td>2 進水</td><td class="on c-do">開</td><td class="off">關</td><td class="off">關</td><td class="off">0</td><td><span class="lamp g"></span>綠</td><td>水位（30001）到 25 cm</td></tr>
+        <tr><td>3 洗衣</td><td class="off">關</td><td class="off">關</td><td class="off">關</td><td class="on c-ao">60 rpm</td><td><span class="lamp g"></span>綠</td><td>時間到（約 15 分鐘）</td></tr>
+        <tr><td>4 排水</td><td class="off">關</td><td class="on c-do">開</td><td class="off">關</td><td class="off">0</td><td><span class="lamp g"></span>綠</td><td>水位回到 0 cm</td></tr>
+        <tr><td>5 漂清</td><td class="on c-do">開→關</td><td class="on c-do">關→開</td><td class="off">關</td><td class="on c-ao">60 rpm</td><td><span class="lamp g"></span>綠</td><td>進水、轉、排水再做一次</td></tr>
+        <tr><td>6 脫水</td><td class="off">關</td><td class="on c-do">開</td><td class="off">關</td><td class="on c-ao">1200 rpm</td><td><span class="lamp g"></span>綠</td><td>時間到（約 6 分鐘）</td></tr>
+        <tr class="now"><td>7 烘乾</td><td class="off">關</td><td class="off">關</td><td class="on c-do">開</td><td class="on c-ao">50 rpm</td><td><span class="lamp g"></span>綠</td><td>時間到（約 60 分鐘），溫度維持 75 °C</td></tr>
+        <tr><td>8 完成</td><td class="off">關</td><td class="off">關</td><td class="off">關</td><td class="off">0</td><td><span class="lamp y"></span>黃＋逼逼 3 聲</td><td>門鎖解開，可以拿衣服</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="muted">這張表就是 PLC 程式要做的事（第 4 階段會練）。C# 不負責控制流程，只負責看「現在第幾步、數值多少、有沒有警報」。下一張圖的數值，就是<b>第 7 步烘乾中</b>的那一刻（上表反白那一列）。</p>
+</section>
+
+<!-- 1. 大架構圖 -->
+<section>
+  <div class="eyebrow">第一張圖：訊號走到哪裡</div>
+  <h2>從現場到你的程式</h2>
+  <p>這台洗衣機總共 17 個訊號：<b class="k c-di">5 個 DI</b>、<b class="k c-do">8 個 DO</b>、<b class="k c-ai">3 個 AI</b>、<b class="k c-ao">1 個 AO</b>。</p>
+  <p>PLC 上插著幾塊模組，每塊模組上有幾個<b>接點</b>（就是接電線的螺絲孔）。一個設備的電線接到一個接點，<b>每個接點固定對應一格櫃子</b>，櫃子的編號就是位址。</p>
+  <div class="panel diagram">
+    <svg viewBox="0 0 900 914" role="img" aria-label="洗脫烘洗衣機：17 個設備各接到 PLC 模組的一個接點，每個接點對應一格櫃子，C# 透過網路讀寫櫃子；另有一格心跳計數器 40002 由 PLC 每秒加 1">
+      <defs>
+        <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="head"/></marker>
+        <marker id="aha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="head-a"/></marker>
+      </defs>
+      <text x="20" y="28" class="t-muted" font-size="14">① 洗衣機上的設備（共 17 個）</text>
+      <text x="276" y="28" class="t-muted" font-size="14">② PLC：一個接點 ＝ 一格櫃子</text>
+      <text x="604" y="28" class="t-muted" font-size="14">③ 你的電腦</text>
+      <rect x="262" y="44" width="296" height="854" rx="12" class="plc"/>
+      <text x="309" y="68" font-size="13" text-anchor="middle" class="t-muted">模組</text>
+      <text x="387" y="68" font-size="13" text-anchor="middle" class="t-muted">櫃號</text><text x="426" y="68" font-size="13" class="t-muted">烘乾中的值</text>
+      <g class="c-di"><rect x="276" y="80" width="66" height="200" rx="6" class="mod"/><text x="309" y="177.0" text-anchor="middle" font-size="13" font-weight="700" class="c-text">DI 模組</text><text x="309" y="195.0" text-anchor="middle" font-size="12" class="t-muted">5 個接點</text></g><g class="c-do"><rect x="276" y="300" width="66" height="320" rx="6" class="mod"/><text x="309" y="457.0" text-anchor="middle" font-size="13" font-weight="700" class="c-text">DO 模組</text><text x="309" y="475.0" text-anchor="middle" font-size="12" class="t-muted">8 個接點</text></g><g class="c-ai"><rect x="276" y="640" width="66" height="120" rx="6" class="mod"/><text x="309" y="697.0" text-anchor="middle" font-size="13" font-weight="700" class="c-text">AI 模組</text><text x="309" y="715.0" text-anchor="middle" font-size="12" class="t-muted">3 個接點</text></g><g class="c-ao"><rect x="276" y="780" width="66" height="40" rx="6" class="mod"/><text x="309" y="799.0" text-anchor="middle" font-size="12" font-weight="700" class="c-text">AO 模組</text><text x="309" y="813.0" text-anchor="middle" font-size="11" class="t-muted">1 個接點</text></g><g class="c-hb"><rect x="276" y="840" width="66" height="40" rx="6" class="mod" stroke-dasharray="4 4"/><text x="309" y="859.0" text-anchor="middle" font-size="12" font-weight="700" class="c-text">內部</text><text x="309" y="873.0" text-anchor="middle" font-size="11" class="t-muted">沒有接點</text></g><g class="c-di"><rect x="20" y="84" width="190" height="32" rx="6" class="box"/><text x="32" y="105" font-size="14">開始鍵</text><text x="200" y="105" font-size="12" text-anchor="end" class="c-text">DI</text><line x1="212" y1="100" x2="266" y2="100" class="wire" marker-end="url(#ah)"/><circle cx="272" cy="100" r="4.5" class="tag"/><line x1="342" y1="100" x2="352" y2="100" class="wire"/><rect x="352" y="84" width="196" height="32" rx="5" class="locker"/><rect x="358" y="89" width="58" height="22" rx="4" class="tag"/><text x="387" y="105" text-anchor="middle" font-size="13" class="tag-t">10001</text><text x="426" y="105" font-size="14">0　沒按</text></g><g class="c-di"><rect x="20" y="124" width="190" height="32" rx="6" class="box"/><text x="32" y="145" font-size="14">停止鍵</text><text x="200" y="145" font-size="12" text-anchor="end" class="c-text">DI</text><line x1="212" y1="140" x2="266" y2="140" class="wire" marker-end="url(#ah)"/><circle cx="272" cy="140" r="4.5" class="tag"/><line x1="342" y1="140" x2="352" y2="140" class="wire"/><rect x="352" y="124" width="196" height="32" rx="5" class="locker"/><rect x="358" y="129" width="58" height="22" rx="4" class="tag"/><text x="387" y="145" text-anchor="middle" font-size="13" class="tag-t">10002</text><text x="426" y="145" font-size="14">0　沒按</text></g><g class="c-di"><rect x="20" y="164" width="190" height="32" rx="6" class="box"/><text x="32" y="185" font-size="14">門關好</text><text x="200" y="185" font-size="12" text-anchor="end" class="c-text">DI</text><line x1="212" y1="180" x2="266" y2="180" class="wire" marker-end="url(#ah)"/><circle cx="272" cy="180" r="4.5" class="tag"/><line x1="342" y1="180" x2="352" y2="180" class="wire"/><rect x="352" y="164" width="196" height="32" rx="5" class="locker"/><rect x="358" y="169" width="58" height="22" rx="4" class="tag"/><text x="387" y="185" text-anchor="middle" font-size="13" class="tag-t">10003</text><text x="426" y="185" font-size="14">1　關好</text></g><g class="c-di"><rect x="20" y="204" width="190" height="32" rx="6" class="box"/><text x="32" y="225" font-size="14">門已鎖</text><text x="200" y="225" font-size="12" text-anchor="end" class="c-text">DI</text><line x1="212" y1="220" x2="266" y2="220" class="wire" marker-end="url(#ah)"/><circle cx="272" cy="220" r="4.5" class="tag"/><line x1="342" y1="220" x2="352" y2="220" class="wire"/><rect x="352" y="204" width="196" height="32" rx="5" class="locker"/><rect x="358" y="209" width="58" height="22" rx="4" class="tag"/><text x="387" y="225" text-anchor="middle" font-size="13" class="tag-t">10004</text><text x="426" y="225" font-size="14">1　鎖住</text></g><g class="c-di"><rect x="20" y="244" width="190" height="32" rx="6" class="box"/><text x="32" y="265" font-size="14">過熱保護開關</text><text x="200" y="265" font-size="12" text-anchor="end" class="c-text">DI</text><line x1="212" y1="260" x2="266" y2="260" class="wire" marker-end="url(#ah)"/><circle cx="272" cy="260" r="4.5" class="tag"/><line x1="342" y1="260" x2="352" y2="260" class="wire"/><rect x="352" y="244" width="196" height="32" rx="5" class="locker"/><rect x="358" y="249" width="58" height="22" rx="4" class="tag"/><text x="387" y="265" text-anchor="middle" font-size="13" class="tag-t">10005</text><text x="426" y="265" font-size="14">0　正常</text></g><g class="c-do"><rect x="20" y="304" width="190" height="32" rx="6" class="box"/><text x="32" y="325" font-size="14">進水閥</text><text x="200" y="325" font-size="12" text-anchor="end" class="c-text">DO</text><line x1="270" y1="320" x2="216" y2="320" class="wire" marker-end="url(#ah)"/><circle cx="272" cy="320" r="4.5" class="tag"/><line x1="342" y1="320" x2="352" y2="320" class="wire"/><rect x="352" y="304" width="196" height="32" rx="5" class="locker"/><rect x="358" y="309" width="58" height="22" rx="4" class="tag"/><text x="387" y="325" text-anchor="middle" font-size="13" class="tag-t">00001</text><text x="426" y="325" font-size="14">0　關</text></g><g class="c-do"><rect x="20" y="344" width="190" height="32" rx="6" class="box"/><text x="32" y="365" font-size="14">排水泵</text><text x="200" y="365" font-size="12" text-anchor="end" class="c-text">DO</text><line x1="270" y1="360" x2="216" y2="360" class="wire" marker-end="url(#ah)"/><circle cx="272" cy="360" r="4.5" class="tag"/><line x1="342" y1="360" x2="352" y2="360" class="wire"/><rect x="352" y="344" width="196" height="32" rx="5" class="locker"/><rect x="358" y="349" width="58" height="22" rx="4" class="tag"/><text x="387" y="365" text-anchor="middle" font-size="13" class="tag-t">00002</text><text x="426" y="365" font-size="14">0　停</text></g><g class="c-do"><rect x="20" y="384" width="190" height="32" rx="6" class="box"/><text x="32" y="405" font-size="14">門鎖</text><text x="200" y="405" font-size="12" text-anchor="end" class="c-text">DO</text><line x1="270" y1="400" x2="216" y2="400" class="wire" marker-end="url(#ah)"/><circle cx="272" cy="400" r="4.5" class="tag"/><line x1="342" y1="400" x2="352" y2="400" class="wire"/><rect x="352" y="384" width="196" height="32" rx="5" class="locker"/><rect x="358" y="389" width="58" height="22" rx="4" class="tag"/><text x="387" y="405" text-anchor="middle" font-size="13" class="tag-t">00003</text><text x="426" y="405" font-size="14">1　鎖住</text></g><g class="c-do"><rect x="20" y="424" width="190" height="32" rx="6" class="box"/><text x="32" y="445" font-size="14">烘乾加熱器</text><text x="200" y="445" font-size="12" text-anchor="end" class="c-text">DO</text><line x1="270" y1="440" x2="216" y2="440" class="wire" marker-end="url(#ah)"/><circle cx="272" cy="440" r="4.5" class="tag"/><line x1="342" y1="440" x2="352" y2="440" class="wire"/><rect x="352" y="424" width="196" height="32" rx="5" class="locker"/><rect x="358" y="429" width="58" height="22" rx="4" class="tag"/><text x="387" y="445" text-anchor="middle" font-size="13" class="tag-t">00004</text><text x="426" y="445" font-size="14">1　加熱中</text></g><g class="c-do"><rect x="20" y="464" width="190" height="32" rx="6" class="box"/><text x="32" y="485" font-size="14">綠燈：運轉中</text><text x="200" y="485" font-size="12" text-anchor="end" class="c-text">DO</text><line x1="270" y1="480" x2="216" y2="480" class="wire" marker-end="url(#ah)"/><circle cx="272" cy="480" r="4.5" class="tag"/><line x1="342" y1="480" x2="352" y2="480" class="wire"/><rect x="352" y="464" width="196" height="32" rx="5" class="locker"/><rect x="358" y="469" width="58" height="22" rx="4" class="tag"/><text x="387" y="485" text-anchor="middle" font-size="13" class="tag-t">00005</text><text x="426" y="485" font-size="14">1　亮</text></g><g class="c-do"><rect x="20" y="504" width="190" height="32" rx="6" class="box"/><text x="32" y="525" font-size="14">黃燈：洗好了</text><text x="200" y="525" font-size="12" text-anchor="end" class="c-text">DO</text><line x1="270" y1="520" x2="216" y2="520" class="wire" marker-end="url(#ah)"/><circle cx="272" cy="520" r="4.5" class="tag"/><line x1="342" y1="520" x2="352" y2="520" class="wire"/><rect x="352" y="504" width="196" height="32" rx="5" class="locker"/><rect x="358" y="509" width="58" height="22" rx="4" class="tag"/><text x="387" y="525" text-anchor="middle" font-size="13" class="tag-t">00006</text><text x="426" y="525" font-size="14">0　暗</text></g><g class="c-do"><rect x="20" y="544" width="190" height="32" rx="6" class="box"/><text x="32" y="565" font-size="14">紅燈：警報</text><text x="200" y="565" font-size="12" text-anchor="end" class="c-text">DO</text><line x1="270" y1="560" x2="216" y2="560" class="wire" marker-end="url(#ah)"/><circle cx="272" cy="560" r="4.5" class="tag"/><line x1="342" y1="560" x2="352" y2="560" class="wire"/><rect x="352" y="544" width="196" height="32" rx="5" class="locker"/><rect x="358" y="549" width="58" height="22" rx="4" class="tag"/><text x="387" y="565" text-anchor="middle" font-size="13" class="tag-t">00007</text><text x="426" y="565" font-size="14">0　暗</text></g><g class="c-do"><rect x="20" y="584" width="190" height="32" rx="6" class="box"/><text x="32" y="605" font-size="14">蜂鳴器（逼逼聲）</text><text x="200" y="605" font-size="12" text-anchor="end" class="c-text">DO</text><line x1="270" y1="600" x2="216" y2="600" class="wire" marker-end="url(#ah)"/><circle cx="272" cy="600" r="4.5" class="tag"/><line x1="342" y1="600" x2="352" y2="600" class="wire"/><rect x="352" y="584" width="196" height="32" rx="5" class="locker"/><rect x="358" y="589" width="58" height="22" rx="4" class="tag"/><text x="387" y="605" text-anchor="middle" font-size="13" class="tag-t">00008</text><text x="426" y="605" font-size="14">0　安靜</text></g><g class="c-ai"><rect x="20" y="644" width="190" height="32" rx="6" class="box"/><text x="32" y="665" font-size="14">水位計</text><text x="200" y="665" font-size="12" text-anchor="end" class="c-text">AI</text><line x1="212" y1="660" x2="266" y2="660" class="wire" marker-end="url(#ah)"/><circle cx="272" cy="660" r="4.5" class="tag"/><line x1="342" y1="660" x2="352" y2="660" class="wire"/><rect x="352" y="644" width="196" height="32" rx="5" class="locker"/><rect x="358" y="649" width="58" height="22" rx="4" class="tag"/><text x="387" y="665" text-anchor="middle" font-size="13" class="tag-t">30001</text><text x="426" y="665" font-size="14">0 → 0 cm</text></g><g class="c-ai"><rect x="20" y="684" width="190" height="32" rx="6" class="box"/><text x="32" y="705" font-size="14">水溫計</text><text x="200" y="705" font-size="12" text-anchor="end" class="c-text">AI</text><line x1="212" y1="700" x2="266" y2="700" class="wire" marker-end="url(#ah)"/><circle cx="272" cy="700" r="4.5" class="tag"/><line x1="342" y1="700" x2="352" y2="700" class="wire"/><rect x="352" y="684" width="196" height="32" rx="5" class="locker"/><rect x="358" y="689" width="58" height="22" rx="4" class="tag"/><text x="387" y="705" text-anchor="middle" font-size="13" class="tag-t">30002</text><text x="426" y="705" font-size="14">8294 → 30 °C</text></g><g class="c-ai"><rect x="20" y="724" width="190" height="32" rx="6" class="box"/><text x="32" y="745" font-size="14">烘衣溫度計</text><text x="200" y="745" font-size="12" text-anchor="end" class="c-text">AI</text><line x1="212" y1="740" x2="266" y2="740" class="wire" marker-end="url(#ah)"/><circle cx="272" cy="740" r="4.5" class="tag"/><line x1="342" y1="740" x2="352" y2="740" class="wire"/><rect x="352" y="724" width="196" height="32" rx="5" class="locker"/><rect x="358" y="729" width="58" height="22" rx="4" class="tag"/><text x="387" y="745" text-anchor="middle" font-size="13" class="tag-t">30003</text><text x="426" y="745" font-size="14">13824 → 75 °C</text></g><g class="c-ao"><rect x="20" y="784" width="190" height="32" rx="6" class="box"/><text x="32" y="805" font-size="14">滾筒馬達轉速</text><text x="200" y="805" font-size="12" text-anchor="end" class="c-text">AO</text><line x1="270" y1="800" x2="216" y2="800" class="wire" marker-end="url(#ah)"/><circle cx="272" cy="800" r="4.5" class="tag"/><line x1="342" y1="800" x2="352" y2="800" class="wire"/><rect x="352" y="784" width="196" height="32" rx="5" class="locker"/><rect x="358" y="789" width="58" height="22" rx="4" class="tag"/><text x="387" y="805" text-anchor="middle" font-size="13" class="tag-t">40001</text><text x="426" y="805" font-size="14">1152 → 50 rpm</text></g><g class="c-hb"><rect x="20" y="844" width="190" height="32" rx="6" class="box" stroke-dasharray="4 4"/><text x="32" y="865" font-size="13" class="t-muted">不接線・PLC 自己寫</text><text x="200" y="865" font-size="12" text-anchor="end" class="c-text">心跳</text><circle cx="272" cy="860" r="4.5" class="tag"/><line x1="342" y1="860" x2="352" y2="860" class="wire"/><rect x="352" y="844" width="196" height="32" rx="5" class="locker"/><rect x="358" y="849" width="58" height="22" rx="4" class="tag"/><text x="387" y="865" text-anchor="middle" font-size="13" class="tag-t">40002</text><text x="426" y="865" font-size="14">1529　每秒 +1</text></g>
+      <path d="M558,471 L598,471" class="net" marker-end="url(#aha)"/>
+      <text x="562" y="457" font-size="12" class="t-muted">網路</text>
+      <rect x="602" y="361" width="170" height="246" rx="10" class="box"/>
+      <text x="687" y="393" text-anchor="middle" font-size="17" font-weight="700">C# 程式</text>
+      <text x="616" y="423" font-size="13">讀 10001～10005</text>
+      <text x="616" y="447" font-size="13">讀 00001～00008</text>
+      <text x="616" y="471" font-size="13">讀 30001～30003</text>
+      <text x="616" y="495" font-size="13">讀 40001 轉速</text>
+      <text x="616" y="519" font-size="13" class="c-hb c-text">讀 40002 心跳</text>
+      <text x="616" y="551" font-size="13" class="t-muted">→ 換算成 cm、°C</text>
+      <text x="616" y="573" font-size="13" class="t-muted">→ 判斷要不要警報</text>
+      <text x="616" y="595" font-size="13" class="t-muted">→ 心跳不動＝斷線</text>
+      <line x1="774" y1="471" x2="800" y2="471" class="wire" marker-end="url(#ah)"/>
+      <rect x="804" y="423" width="86" height="96" rx="10" class="box"/>
+      <text x="847" y="459" text-anchor="middle" font-size="15" font-weight="700">畫面</text>
+      <text x="847" y="483" text-anchor="middle" font-size="13" class="t-muted">資料庫</text>
+      <text x="847" y="505" text-anchor="middle" font-size="13" class="t-muted">警報</text>
+    </svg>
+  </div>
+  <div class="panel" style="display:flex;flex-direction:column;gap:8px">
+    <h3>照著第一排讀一次</h3>
+    <p>開始鍵的電線，接到 DI 模組的第 1 個接點 → PLC 把它的狀態放在 <span class="mono">10001</span> 這格 → 沒按是 0，按下去變 1。</p>
+    <p>C# 想知道開始鍵有沒有被按，就去讀 <span class="mono">10001</span>。PLC 要開始進水，就把 <span class="mono">00001</span> 變成 1，DO 模組那個接點就會送電，進水閥打開。</p>
+    <p>燈和蜂鳴器也是 DO：紅燈就是 <span class="mono">00007</span>，寫 1 就亮；蜂鳴器是 <span class="mono">00008</span>，寫 1 就逼逼叫。</p>
+    <p class="muted">每一排都一樣：一個設備 → 一個接點 → 一格櫃子。17 個設備就有 17 格。這張「設備、接點、櫃號」的對照，就是工廠裡說的<b>點位表</b>。</p>
+  </div>
+  <div class="panel" style="display:flex;flex-direction:column;gap:10px">
+    <h3>最下面那一格：心跳計數器 <span class="mono">40002</span></h3>
+    <p>它不接任何電線，是 PLC 自己用的一格櫃子。PLC 程式每秒把它加 1：1527、1528、1529…。C# 每秒去讀它，只要數字有在跳，就知道 PLC 活著、網路也是通的。</p>
+    <div class="two">
+      <div style="display:flex;flex-direction:column;gap:6px;min-width:0"><b>PLC 這邊（每秒做一次）</b>
+<pre class="code"><span class="cm">(* 每 1 秒加 1，加到 30000 就從 0 重來 *)</span>
+IF OneSecond THEN
+  Heartbeat := (Heartbeat + 1) MOD 30000;
+END_IF;</pre></div>
+      <div style="display:flex;flex-direction:column;gap:6px;min-width:0"><b>C# 這邊（每秒讀一次）</b>
+<pre class="code"><span class="cm">// 40002 → 程式從 0 數，填 1</span>
+ushort hb = plc.ReadHoldingRegisters(1, 1, 1)[0];
+if (hb == lastHb) stuckSeconds++;
+else { stuckSeconds = 0; lastHb = hb; }
+if (stuckSeconds >= 3) ShowOffline(); <span class="cm">// 畫面變灰</span></pre></div>
+    </div>
+    <p class="muted">為什麼不能只看「讀不讀得到」？因為有時候網路通、PLC 程式卻停了（例如切到 STOP 模式），數字還讀得到，但永遠不會變。心跳不動，才真的代表出事。</p>
+  </div>
+  <p>C# 永遠不會碰到電線。它只做一件事：<b>透過網路，報櫃號，拿數字</b>。電的部分 PLC 已經處理好了。</p>
+</section>
+
+<!-- 1a. 燈號與警報 -->
+<section>
+  <div class="eyebrow">出狀況時</div>
+  <h2>燈號與警報</h2>
+  <p>每一條規則都是「看哪一格 → 亮哪盞燈 → 機器做什麼」。判斷的是 PLC 程式，SCADA 畫面同步顯示同一個狀態，並把警報發生的時間記下來。</p>
+  <div class="panel tbl">
+    <table>
+      <thead><tr><th>條件（從哪一格看出來）</th><th>燈號</th><th>聲音</th><th>機器動作</th></tr></thead>
+      <tbody>
+        <tr><td>烘衣溫度 <span class="mono">30003</span> 超過 90 °C</td><td><span class="lamp r"></span>紅燈 <span class="mono">00007</span></td><td>一直逼逼</td><td>關掉烘乾加熱器 <span class="mono">00004</span></td></tr>
+        <tr><td>過熱保護開關 <span class="mono">10005</span> 跳開（變 1）</td><td><span class="lamp r"></span>紅燈</td><td>一直逼逼</td><td>開關本身直接斷電，不靠程式</td></tr>
+        <tr><td>水位 <span class="mono">30001</span> 超過 45 cm</td><td><span class="lamp r"></span>紅燈</td><td>一直逼逼</td><td>關掉進水閥 <span class="mono">00001</span></td></tr>
+        <tr><td>門沒鎖（<span class="mono">10004</span>＝0）卻按開始</td><td>不亮綠燈</td><td>短逼 1 聲</td><td>不准開進水閥（安全連鎖）</td></tr>
+        <tr><td>第 8 步：全部做完</td><td><span class="lamp y"></span>黃燈 <span class="mono">00006</span>，綠燈熄</td><td>逼逼 3 聲</td><td>解開門鎖 <span class="mono">00003</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="two">
+    <div class="panel" style="display:flex;flex-direction:column;gap:6px"><h3>第一層：程式判斷（軟體警報）</h3><p>PLC 讀 <span class="mono">30003</span>，超過 90 °C 就關加熱器、亮紅燈。可以隨時改設定值，C# 畫面也看得到。</p></div>
+    <div class="panel" style="display:flex;flex-direction:column;gap:6px"><h3>第二層：溫度開關（硬體保護）</h3><p>熱到一定溫度，開關自己跳開把電切斷。就算程式當掉也有效。PLC 只是從 <span class="mono">10005</span> 知道「它跳了」。</p></div>
+  </div>
+  <p class="muted">紅燈警報的逼逼聲會一直叫，直到有人按停止鍵（<span class="mono">10002</span>）確認，這個動作叫「警報確認」。</p>
+</section>
+
+<!-- 1b. 看不到的電 -->
+<section>
+  <div class="eyebrow">第二張圖：看不到的訊號</div>
+  <h2>電線上是「電」，櫃子裡是「數字」</h2>
+  <p>現場的訊號是靠硬體接線帶進 PLC 的：感測器和 PLC 之間拉一條電線，線上跑的是電壓或電流。你看不到它，只能用三用電表量。PLC 上插著一塊塊「輸入模組」，負責把電翻譯成數字。</p>
+  <div class="panel diagram">
+    <svg viewBox="0 0 900 250" role="img" aria-label="感測器經電線送出電壓電流，PLC 模組翻譯成數字放進櫃子">
+      <defs>
+        <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="head"/></marker>
+      </defs>
+      <text x="20" y="24" class="t-muted" font-size="14">感測器</text>
+      <text x="200" y="24" class="t-muted" font-size="14">電線：看不到的電（硬體接線）</text>
+      <text x="436" y="24" class="t-muted" font-size="14">PLC 模組＝翻譯機</text>
+      <text x="664" y="24" class="t-muted" font-size="14">櫃子裡：C# 讀得到</text>
+
+      <!-- DI 列 -->
+      <g class="c-di">
+        <rect x="20" y="44" width="160" height="56" rx="8" class="box"/>
+        <text x="36" y="68" font-size="15" font-weight="700">開始鍵</text>
+        <text x="36" y="89" font-size="13" class="c-text">數位 DI</text>
+        <line x1="190" y1="72" x2="420" y2="72" class="cable"/>
+        <path d="M200,88 H240 V56 H290 V88 H330 V56 H385 V88 H410" class="wave"/>
+        <text x="200" y="120" font-size="13" class="t-muted">只有兩種：24V（有電）或 0V（沒電）</text>
+        <rect x="430" y="44" width="180" height="56" rx="8" class="mod"/>
+        <text x="446" y="68" font-size="15" font-weight="700">DI 輸入模組</text>
+        <text x="446" y="89" font-size="13" class="t-muted">有電 → 1，沒電 → 0</text>
+        <line x1="612" y1="72" x2="654" y2="72" class="wire" marker-end="url(#ah2)"/>
+        <rect x="660" y="44" width="220" height="56" rx="6" class="locker"/>
+        <rect x="672" y="58" width="64" height="28" rx="4" class="tag"/><text x="704" y="77" text-anchor="middle" font-size="14" class="tag-t">10001</text>
+        <text x="750" y="78" font-size="15" font-weight="700">1（有按）</text>
+      </g>
+
+      <!-- AI 列 -->
+      <g class="c-ai">
+        <rect x="20" y="150" width="160" height="56" rx="8" class="box"/>
+        <text x="36" y="174" font-size="15" font-weight="700">水位計</text>
+        <text x="36" y="195" font-size="13" class="c-text">類比 AI</text>
+        <line x1="190" y1="178" x2="420" y2="178" class="cable"/>
+        <path d="M200,196 C230,160 255,156 285,174 S345,200 375,170 S400,160 410,166" class="wave"/>
+        <text x="200" y="230" font-size="13" class="t-muted">大小一直在變：4～20 mA 或 0～10 V</text>
+        <rect x="430" y="150" width="180" height="56" rx="8" class="mod"/>
+        <text x="446" y="174" font-size="15" font-weight="700">AI 類比模組</text>
+        <text x="446" y="195" font-size="13" class="t-muted">12 mA → 13824</text>
+        <line x1="612" y1="178" x2="654" y2="178" class="wire" marker-end="url(#ah2)"/>
+        <rect x="660" y="150" width="220" height="56" rx="6" class="locker"/>
+        <rect x="672" y="164" width="64" height="28" rx="4" class="tag"/><text x="704" y="183" text-anchor="middle" font-size="14" class="tag-t">30001</text>
+        <text x="750" y="184" font-size="15" font-weight="700">13824</text>
+      </g>
+    </svg>
+  </div>
+  <div class="sig">
+    <div class="cell c-di"><span class="what">數位＝電燈開關</span><span class="eg">只有開和關兩種狀態。線上不是 24V 就是 0V，模組翻成 1 或 0。（線斷了怎麼辦？看下一節）</span></div>
+    <div class="cell c-ai"><span class="what">類比＝水龍頭</span><span class="eg">可以開一點點，也可以開很大。電流在 4～20 mA 之間連續變化，模組翻成 0～27648 之間的數字。</span></div>
+  </div>
+  <div class="panel tbl">
+    <table>
+      <thead><tr><th>訊號</th><th>電線上是什麼（看不到）</th><th>誰負責翻譯</th><th>櫃子裡變成</th></tr></thead>
+      <tbody>
+        <tr class="c-di"><td><span class="pill">DI</span></td><td>24V 有電／0V 沒電</td><td>DI 輸入模組</td><td>1 或 0</td></tr>
+        <tr class="c-ai"><td><span class="pill">AI</span></td><td>4～20 mA 電流，或 0～10 V 電壓</td><td>AI 類比模組</td><td>一個整數（西門子常見 0～27648，三菱常見 0～4000）</td></tr>
+        <tr class="c-do"><td><span class="pill">DO</span></td><td>PLC 送出 24V，打開進水閥、點亮燈、讓蜂鳴器叫</td><td>DO 輸出模組</td><td>你寫 1 → 線上出現 24V</td></tr>
+        <tr class="c-ao"><td><span class="pill">AO</span></td><td>PLC 送出 4～20 mA，告訴滾筒馬達轉多快</td><td>AO 類比模組</td><td>你寫數字 → 線上出現對應電流</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="muted">接線和模組設定是電控工程師的工作。你只要知道：同一個訊號在電線上叫「12 mA」，進了 PLC 叫「13824」，到了 C# 換算後才叫「100 cm」。三個講的是同一件事。</p>
+</section>
+
+<!-- 1c. 斷線判斷 -->
+<section>
+  <div class="eyebrow">延伸問題</div>
+  <h2>沒接到線，跟「關」有什麼不一樣？</h2>
+  <p>用一般接法時，開關「沒按」和電線「斷掉」，線上都是 0V，PLC 都讀到 0，<b>分不出來</b>。如果斷的剛好是停止鍵的線，按了停止機器也不會停，這很危險。所以廠商會用下面幾種方法。</p>
+
+  <div class="wires">
+    <div class="wire-card">
+      <h3>一般接法（常開）</h3>
+      <svg viewBox="0 0 280 100" role="img" aria-label="24V 經過平常打開的開關接到 DI 模組">
+        <text x="6" y="55" font-size="14">24V</text>
+        <path d="M40 50 H100 M150 50 H210 M100 50 L140 30" class="sch"/>
+        <circle cx="100" cy="50" r="3.5" class="sch-dot"/><circle cx="150" cy="50" r="3.5" class="sch-dot"/>
+        <rect x="210" y="34" width="60" height="32" rx="5" class="sch"/><text x="240" y="55" font-size="13" text-anchor="middle">DI</text>
+        <text x="125" y="86" font-size="12" text-anchor="middle" class="t-muted">平常是打開的</text>
+      </svg>
+      <table><thead><tr><th>狀況</th><th>線上</th><th>讀到</th></tr></thead><tbody>
+        <tr><td>按下</td><td>24V</td><td>1</td></tr>
+        <tr><td>放開</td><td>0V</td><td>0</td></tr>
+        <tr><td>線斷了</td><td>0V</td><td>0</td></tr></tbody></table>
+      <div class="verdict no">✗ 放開和線斷了一模一樣</div>
+      <p class="muted" style="font-size:14px">用在不重要的訊號，例如開始鍵：線斷了頂多按了沒反應。</p>
+    </div>
+
+    <div class="wire-card">
+      <h3>常閉接法（最常見）</h3>
+      <svg viewBox="0 0 280 100" role="img" aria-label="24V 經過平常接通的開關接到 DI 模組">
+        <text x="6" y="55" font-size="14">24V</text>
+        <path d="M40 50 H100 M150 50 H210 M100 50 L148 45" class="sch"/>
+        <circle cx="100" cy="50" r="3.5" class="sch-dot"/><circle cx="150" cy="50" r="3.5" class="sch-dot"/>
+        <rect x="210" y="34" width="60" height="32" rx="5" class="sch"/><text x="240" y="55" font-size="13" text-anchor="middle">DI</text>
+        <text x="125" y="86" font-size="12" text-anchor="middle" class="t-muted">平常是接通的</text>
+      </svg>
+      <table><thead><tr><th>狀況</th><th>線上</th><th>讀到</th></tr></thead><tbody>
+        <tr><td>正常</td><td>24V</td><td>1</td></tr>
+        <tr><td>按下停止</td><td>0V</td><td>0</td></tr>
+        <tr><td>線斷了</td><td>0V</td><td>0</td></tr></tbody></table>
+      <div class="verdict ok">✓ 線斷了 ＝ 當作按了停止，機器停下來</div>
+      <p class="muted" style="font-size:14px">還是分不出來，但錯也是往安全的方向錯。用在停止鍵、緊急停止、過熱保護開關。</p>
+    </div>
+
+    <div class="wire-card">
+      <h3>加一顆電阻（斷線偵測）</h3>
+      <svg viewBox="0 0 280 100" role="img" aria-label="開關旁邊並聯一顆電阻，開關打開時仍有一點電流">
+        <text x="6" y="55" font-size="14">24V</text>
+        <path d="M40 50 H100 M150 50 H210 M100 50 L140 30 M92 50 V80 H102 M148 80 H158 V50" class="sch"/>
+        <path d="M102 80 L108 72 L116 88 L124 72 L132 88 L140 72 L148 80" class="sch-r"/>
+        <circle cx="100" cy="50" r="3.5" class="sch-dot"/><circle cx="150" cy="50" r="3.5" class="sch-dot"/>
+        <rect x="210" y="34" width="60" height="32" rx="5" class="sch"/><text x="240" y="55" font-size="13" text-anchor="middle">DI</text>
+        <text x="178" y="92" font-size="12" class="t-muted">電阻</text>
+      </svg>
+      <table><thead><tr><th>狀況</th><th>線上電流</th><th>讀到</th></tr></thead><tbody>
+        <tr><td>按下</td><td>很多</td><td>1</td></tr>
+        <tr><td>放開</td><td>一點點（走電阻）</td><td>0</td></tr>
+        <tr><td>線斷了</td><td>完全沒有</td><td>斷線警報</td></tr></tbody></table>
+      <div class="verdict ok">✓ 三種狀況都分得出來</div>
+      <p class="muted" style="font-size:14px">要搭配有「斷線偵測」功能的 DI 模組。有一種叫 NAMUR 的感測器規格，也是同樣的原理。</p>
+    </div>
+  </div>
+
+  <div class="rhyme" style="max-width:560px">
+    <span class="n">延伸口訣</span>
+    <span class="say">重要的接常閉，<br>斷線就當停機。</span>
+  </div>
+
+  <h3>不改接線也能抓的方法</h3>
+  <div class="more">
+    <div class="panel" style="display:flex;flex-direction:column;gap:6px;min-width:0"><b>程式交叉檢查</b>
+      <p style="font-size:15px">用常理判斷：「門已鎖 <span class="mono">10004</span>＝1，但門關好 <span class="mono">10003</span>＝0」不可能發生，一定是開關或線壞了。進水閥開了 2 分鐘，水位 <span class="mono">30001</span> 都沒上升，也算異常。</p></div>
+    <div class="panel" style="display:flex;flex-direction:column;gap:6px;min-width:0"><b>雙通道（安全用）</b>
+      <p style="font-size:15px">緊急停止按鈕裡有兩組接點，一組常開、一組常閉，兩個訊號永遠相反。哪天兩個變成一樣，就知道線路出問題。安全繼電器就是這樣檢查的。</p></div>
+    <div class="panel" style="display:flex;flex-direction:column;gap:6px;min-width:0"><b>SCADA 端：通訊斷線</b>
+      <p style="font-size:15px">如果是 PLC 或整個模組斷線，SCADA 不會顯示 0，而是把數值變灰色、標「通訊中斷」或「品質不良」。另外放一個每秒加 1 的心跳計數器，數字不跳了就知道斷線。</p></div>
+  </div>
+  <p class="muted">本頁前面的洗衣機例子為了好懂，先用一般接法。實務上，停止鍵 <span class="mono">10002</span> 和過熱保護開關 <span class="mono">10005</span> 多半用常閉接法，正常時讀到的是 1，變成 0 才代表按了停止或過熱。</p>
+</section>
+
+<!-- 2. 四種訊號 -->
+<section>
+  <div class="eyebrow">第三張圖：四種訊號</div>
+  <h2>DI、DO、AI、AO 其實只是兩個問題</h2>
+  <p>第一個問題：是「開關」還是「數字」？第二個問題：是「進來」還是「出去」？兩兩組合，剛好四種。</p>
+  <div class="axis">
+    <div></div><div class="top">進來 I（Input）<br>現場告訴 PLC</div><div class="top">出去 O（Output）<br>PLC 命令現場</div>
+    <div class="lab">開關 D<br>(Digital)<br>只有有／沒有</div>
+    <div class="sig" style="display:contents">
+      <div class="cell c-di"><span class="code">DI</span><span class="what">開關進來</span><span class="eg">開始鍵有沒有按、門有沒有關、過熱開關有沒有跳</span></div>
+      <div class="cell c-do"><span class="code">DO</span><span class="what">開關出去</span><span class="eg">開進水閥、開加熱器、綠黃紅燈、蜂鳴器</span></div>
+    </div>
+    <div class="lab">數字 A<br>(Analog)<br>有大有小</div>
+    <div class="sig" style="display:contents">
+      <div class="cell c-ai"><span class="code">AI</span><span class="what">數字進來</span><span class="eg">水位 25 cm、水溫 30 °C、烘衣溫度 75 °C</span></div>
+      <div class="cell c-ao"><span class="code">AO</span><span class="what">數字出去</span><span class="eg">滾筒洗衣 60 rpm、脫水 1200 rpm</span></div>
+    </div>
+  </div>
+  <div class="panel" style="display:flex;flex-direction:column;gap:10px">
+    <h3>「出去」＝「設定」嗎？</h3>
+    <p>是的。DO 和 AO 都是 PLC 送出去的<b>命令</b>，也就是「設定」：DO 設定開或關，AO 設定要多少。但設定了，不代表馬上就到了。</p>
+    <div class="two">
+      <div class="cell c-ao" style="border-radius:12px;padding:14px 16px;background:color-mix(in srgb, var(--c) 10%, var(--surface));border:1.5px solid color-mix(in srgb, var(--c) 45%, transparent);display:flex;flex-direction:column;gap:4px">
+        <b>冷氣遙控器設 26 度</b><span class="muted" style="font-size:15px">這是「設定值」，是你送出去的命令 → 像 AO</span></div>
+      <div class="cell c-ai" style="border-radius:12px;padding:14px 16px;background:color-mix(in srgb, var(--c) 10%, var(--surface));border:1.5px solid color-mix(in srgb, var(--c) 45%, transparent);display:flex;flex-direction:column;gap:4px">
+        <b>房間現在 28 度</b><span class="muted" style="font-size:15px">這是「實際值」，是量回來的 → 像 AI</span></div>
+    </div>
+    <p>洗衣機也一樣：<span class="mono">40001</span> 是「請轉 50 rpm」的設定。馬達真的轉多快，很多機器會再多接一個 AI（例如轉速感測器）量回來看。SCADA 畫面常把兩個並排顯示：<b>設定 50、實際 48</b>。</p>
+<pre class="code"><span class="cm">// 寫設定值：40001 → 填 0；50 rpm 換成模組數字 = 50 / 1200 × 27648 = 1152</span>
+plc.WriteSingleRegister(1, 0, 1152);
+<span class="cm">// 讀回設定值確認有寫進去</span>
+ushort sp = plc.ReadHoldingRegisters(1, 0, 1)[0];   <span class="cm">// 1152</span></pre>
+  </div>
+</section>
+
+<!-- 3. 口訣 -->
+<section>
+  <div class="eyebrow">背起來就好</div>
+  <h2>五句口訣</h2>
+  <div class="rhymes">
+    <div class="rhyme">
+      <span class="n">口訣零　最重要的一句</span>
+      <span class="say">線上是電，櫃裡是數；<br>中間靠模組翻譯。</span>
+      <p class="muted">電線上的電看不到，PLC 模組把它翻成數字，C# 只碰數字。</p>
+    </div>
+    <div class="rhyme">
+      <span class="n">口訣一　四種訊號</span>
+      <span class="say"><span class="k c-di">D</span> 是開關，<span class="k c-ai">A</span> 是多少；<br>I 是耳朵，O 是手。</span>
+      <p class="muted">耳朵負責聽現場（輸入），手負責動現場（輸出）。</p>
+    </div>
+    <div class="rhyme">
+      <span class="n">口訣二　四種櫃號</span>
+      <span class="say">零一開關，三四數字；<br>一三只能看，零四能改。</span>
+      <p class="muted">Modbus 位址開頭的數字就是櫃號：0、1 放開關，3、4 放數字。1、3 是現場量到的，只能讀；0、4 可以由程式寫入。</p>
+    </div>
+    <div class="rhyme">
+      <span class="n">口訣三　位址差一格</span>
+      <span class="say">說明書從 1 數，<br>程式從 0 數。</span>
+      <p class="muted">文件寫 <span class="mono">40001</span>，C# 要填 <span class="mono">0</span>。讀到「隔壁格」的數字，九成是這個原因。</p>
+    </div>
+    <div class="rhyme">
+      <span class="n">口訣四　4-20mA（唯一要懂的電）</span>
+      <span class="say">4 是零，20 是滿，<br>掉到 0 就是斷線。</span>
+      <p class="muted">類比訊號用電流大小代表數值。故意從 4 開始，是為了讓「0」代表線斷了，不會誤以為是 0°C。</p>
+    </div>
+  </div>
+</section>
+
+<!-- 4. 櫃子對照表 -->
+<section>
+  <div class="eyebrow">口訣二的完整版</div>
+  <h2>四種櫃子對照表</h2>
+  <div class="panel tbl">
+    <table>
+      <thead><tr><th>櫃號</th><th>放什麼</th><th>對應訊號</th><th>C# 能做什麼</th><th>NModbus 用的方法</th></tr></thead>
+      <tbody>
+        <tr class="c-do"><td><span class="pill">0xxxx</span></td><td>開關（線圈 Coil）</td><td>DO</td><td>讀、寫</td><td class="mono">ReadCoils / WriteSingleCoil</td></tr>
+        <tr class="c-di"><td><span class="pill">1xxxx</span></td><td>開關（離散輸入）</td><td>DI</td><td>只能讀</td><td class="mono">ReadInputs</td></tr>
+        <tr class="c-ai"><td><span class="pill">3xxxx</span></td><td>數字（輸入暫存器）</td><td>AI</td><td>只能讀</td><td class="mono">ReadInputRegisters</td></tr>
+        <tr class="c-ao"><td><span class="pill">4xxxx</span></td><td>數字（保持暫存器）</td><td>AO、設定值</td><td>讀、寫</td><td class="mono">ReadHoldingRegisters / WriteSingleRegister</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="muted">實務上很多工廠為了方便，把所有數字都放在 4 號櫃。所以拿到一台機器，先跟廠商或電控工程師要「點位表」（哪個櫃號是什麼訊號），這是最重要的一份文件。</p>
+</section>
+
+<!-- 4b. C# 括號裡是什麼 -->
+<section id="c-args">
+  <div class="eyebrow">看懂 C# 那一行</div>
+  <h2>括號裡的數字是什麼？</h2>
+  <p>每一行 C# 都可以拆成四塊：<b>方法名稱</b>決定是哪一種櫃子，括號裡依序是<b>哪一台</b>、<b>哪一格</b>、<b>寫多少（或讀幾格）</b>。</p>
+
+  <div class="panel" style="display:flex;flex-direction:column;gap:14px">
+    <div class="argline mono">plc.<span class="ar a0">WriteSingleCoil</span>(<span class="ar a1">1</span>, <span class="ar a2">0</span>, <span class="ar a3">true</span>);</div>
+    <div class="argkey">
+      <div class="ak a0"><b>WriteSingleCoil</b><span>哪一種櫃子、要做什麼<br>Coil＝0 號櫃（開關出去），Write＝寫入</span></div>
+      <div class="ak a1"><b>1　站號</b><span>哪一台 PLC<br>同一個網路可能有好幾台，像大樓裡的門牌。這台洗衣機設成 1</span></div>
+      <div class="ak a2"><b>0　位址</b><span>哪一格（從 0 數）<br>00001 是第 1 格 → 填 0</span></div>
+      <div class="ak a3"><b>true　值</b><span>寫多少<br>開關：true 開、false 關<br>數字：0～65535 的整數</span></div>
+    </div>
+    <p>整句翻成白話：<b>「請 1 號 PLC，把 0 號櫃的第 1 格（進水閥 00001）設成開。」</b></p>
+  </div>
+
+  <div class="two">
+    <div class="panel" style="display:flex;flex-direction:column;gap:8px;min-width:0">
+      <h3>讀的時候，第三個數字是「讀幾格」</h3>
+<pre class="code">ushort[] v = plc.ReadInputRegisters(1, 0, 3);
+<span class="cm">// 1 號 PLC，從第 0 格開始，連續讀 3 格</span>
+<span class="cm">// = 30001～30003 一次讀回來</span>
+ushort level = v[0];   <span class="cm">// 30001 水位</span>
+ushort water = v[1];   <span class="cm">// 30002 水溫</span>
+ushort dry   = v[2];   <span class="cm">// 30003 烘衣溫度</span></pre>
+      <p class="muted" style="font-size:15px">讀回來的是一個陣列，所以只讀一格時，後面要加 <span class="mono">[0]</span> 取出第一個。</p>
+    </div>
+    <div class="panel" style="display:flex;flex-direction:column;gap:8px;min-width:0">
+      <h3>櫃號怎麼換成「位址」</h3>
+      <p style="font-size:15px">櫃號 5 個數字要<b>拆成兩段</b>看：第 1 位是「哪一種櫃子」，後 4 位是「第幾格」。</p>
+      <div class="mono" style="font-size:20px;line-height:1.5">
+        <span class="ar a0">0</span><span class="ar a2">0007</span>
+        <div style="font-family:var(--f-body);font-size:14px;color:var(--muted)"><span style="color:var(--accent)">0</span>＝0 號櫃（開關出去）　<span style="color:var(--ai)">0007</span>＝第 7 格 → 紅燈</div>
+      </div>
+      <p style="font-size:15px">程式數格子是從 <b>0</b> 開始數，所以「第 7 格」在程式裡叫 <b>6</b>：</p>
+      <div class="cnt" role="img" aria-label="第 1 格到第 7 格，在程式裡分別是 0 到 6">
+        <div><span>第1格</span><span>第2格</span><span>第3格</span><span>第4格</span><span>第5格</span><span>第6格</span><span class="hit">第7格</span></div>
+        <div><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span class="hit">6</span></div>
+      </div>
+      <table>
+        <thead><tr><th>櫃號</th><th>哪一種櫃子</th><th>第幾格</th><th>程式填</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">00001</td><td>0 號櫃</td><td>第 1 格</td><td class="mono"><b>0</b></td></tr>
+          <tr><td class="mono">00007</td><td>0 號櫃</td><td>第 7 格</td><td class="mono"><b>6</b></td></tr>
+          <tr><td class="mono">10002</td><td>1 號櫃</td><td>第 2 格</td><td class="mono"><b>1</b></td></tr>
+          <tr><td class="mono">40002</td><td>4 號櫃</td><td>第 2 格</td><td class="mono"><b>1</b></td></tr>
+        </tbody>
+      </table>
+      <p class="muted" style="font-size:15px">「哪一種櫃子」不用填進括號，因為方法名稱已經說了：WriteSingleCoil 就是 0 號櫃，ReadHoldingRegisters 就是 4 號櫃。</p>
+    </div>
+  </div>
+
+  <div class="rhyme" style="max-width:560px">
+    <span class="n">括號口訣</span>
+    <span class="say">方法選櫃子，<br>括號：哪台、哪格、多少。</span>
+  </div>
+  <p class="muted">站號通常是 1，但要看設備說明書：有些機器設成 255 或 0。同一台電腦連好幾台 PLC 時，就靠這個數字分辨。</p>
+
+  <div class="panel" style="display:flex;flex-direction:column;gap:10px">
+    <h3>C# 小字典：本頁出現的符號</h3>
+    <div class="tbl"><table>
+      <thead><tr><th>看到</th><th>意思</th><th>本頁的例子</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">plc</td><td>代表「已經連上的那台 PLC」，所有讀寫都透過它</td><td class="mono">plc.ReadInputs(…)</td></tr>
+        <tr><td class="mono">bool</td><td>只有兩種值的資料：true（是／開）、false（否／關）</td><td>開始鍵有沒有按</td></tr>
+        <tr><td class="mono">ushort</td><td>0～65535 的整數，剛好是 PLC 一格裝得下的大小</td><td>13824、1152</td></tr>
+        <tr><td class="mono">double</td><td>可以有小數的數字，用來算比例和公分</td><td>0.5、25.0</td></tr>
+        <tr><td class="mono">const</td><td>固定不變的數字，取個名字比較好讀</td><td class="mono">MaxRpm = 1200</td></tr>
+        <tr><td class="mono">(ushort)</td><td>把數字轉成 ushort 格式（只留整數）</td><td class="mono">(ushort)1152.0</td></tr>
+        <tr><td class="mono">[0]</td><td>從一排數字裡拿第一個（也是從 0 數）</td><td class="mono">…(1, 0, 1)[0]</td></tr>
+        <tr><td class="mono">=</td><td>把右邊的結果放進左邊的名字裡，不是「等於」</td><td class="mono">cm = ratio * 50</td></tr>
+        <tr><td class="mono">==</td><td>比較兩邊是不是一樣</td><td class="mono">hb == lastHb</td></tr>
+        <tr><td class="mono">!</td><td>相反：true 變 false</td><td class="mono">if (!stopOk)</td></tr>
+        <tr><td class="mono">//</td><td>註解，寫給人看的說明，程式不會執行</td><td class="mono">// 讀 30001</td></tr>
+        <tr><td class="mono">;</td><td>一句話結束</td><td>每行最後</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</section>
+
+<!-- 5. 換算小實驗 -->
+<section>
+  <div class="eyebrow">動手玩一下</div>
+  <h2>一個水位訊號的旅程</h2>
+  <p>洗衣機的水位計量 0～50 cm，送出 4～20 mA。PLC 把電流轉成 0～27648 的數字放進 3 號櫃。C# 讀到數字後，再換回公分。拉拉看：</p>
+  <div class="panel" style="display:flex;flex-direction:column;gap:16px">
+    <label for="ma" style="font-size:15px">現場電流：<b class="mono" id="maTxt">12.0 mA</b></label>
+    <input type="range" id="ma" min="0" max="20" step="0.1" value="12">
+    <div class="lab-grid">
+      <div class="meter"><span class="s">① 電線上（看不到的電）</span><span class="v" id="m1">12.0 mA</span><span class="s">硬體接線帶進來，只能用三用電表量</span></div>
+      <div class="meter"><span class="s">② AI 模組翻譯後，放進 <span class="mono">30001</span></span><span class="v" id="m2">13824</span><span class="s">C# 讀到的原始數字</span></div>
+      <div class="meter"><span class="s">③ C# 換算後</span><span class="v" id="m3">25.0 cm</span><span class="s" id="m4"><span class="status ok">正常</span></span></div>
+    </div>
+    <p class="mono muted" style="font-size:13px">水位 = 原始數字 ÷ 27648 × 50</p>
+  </div>
+  <div class="panel" style="display:flex;flex-direction:column;gap:12px">
+    <h3>公式怎麼來？想成兩把尺</h3>
+    <p>兩把尺一樣長，只是刻度不同。換算就是：<b>先看在第一把尺佔幾成，再找第二把尺上同一個位置。</b></p>
+    <div class="rulers" role="img" aria-label="水位尺 0 到 50 公分，模組尺 0 到 27648，25 公分和 13824 都在正中間">
+      <div class="rl"><span class="rn">水位</span><div class="bar c-ai"><i style="left:50%"></i></div><span class="re">0</span><span class="rm">25 cm</span><span class="rx">50 cm</span></div>
+      <div class="rl"><span class="rn">模組數字</span><div class="bar c-hb"><i style="left:50%"></i></div><span class="re">0</span><span class="rm">13824</span><span class="rx">27648</span></div>
+    </div>
+    <table>
+      <thead><tr><th>例子</th><th>① 佔幾成</th><th>② 換到另一把尺</th></tr></thead>
+      <tbody>
+        <tr><td>水位 25 cm（最高 50）</td><td class="mono">25 ÷ 50 = 0.5</td><td class="mono">0.5 × 27648 = 13824</td></tr>
+        <tr><td>轉速 50 rpm（最高 1200）</td><td class="mono">50 ÷ 1200 ≈ 0.042</td><td class="mono">0.042 × 27648 ≈ 1152</td></tr>
+        <tr><td>讀到 1152，換回轉速</td><td class="mono">1152 ÷ 27648 ≈ 0.042</td><td class="mono">0.042 × 1200 = 50 rpm</td></tr>
+      </tbody>
+    </table>
+    <p class="muted">1200 是滾筒最高轉速，50 是水位最高公分，這些看設備規格。27648 是西門子類比模組的「滿格」數字；它故意不用到最大的 32767，把上面那段留給「超出範圍或斷線」。其他品牌滿格不同，例如三菱常見 0～4000。</p>
+  </div>
+
+  <div class="panel" style="display:flex;flex-direction:column;gap:12px">
+    <h3>寫成 C#：一行程式，一句白話</h3>
+    <p class="muted">兩把尺的兩個步驟，照順序寫成程式就是這樣。左邊是程式，右邊是它在做什麼。</p>
+
+    <b>例子 A：設定滾筒轉 50 rpm（寫出去）</b>
+    <div class="lbl">
+      <div><code>const double MaxRpm = 1200;</code><span>第一把尺的最高刻度：滾筒最快 1200 rpm。<br><span class="muted">const＝固定不變的數字；double＝可以有小數的數字</span></span></div>
+      <div><code>const double FullScale = 27648;</code><span>第二把尺的最高刻度：模組滿格是 27648。</span></div>
+      <div><code>double rpm = 50;</code><span>我想要的轉速：50 rpm。</span></div>
+      <div><code>double ratio = rpm / MaxRpm;</code><span>① 佔幾成：50 ÷ 1200 ≈ 0.042（約 4%）。</span></div>
+      <div><code>double value = ratio * FullScale;</code><span>② 換到第二把尺：0.042 × 27648 ≈ 1152。</span></div>
+      <div><code>ushort raw = (ushort)Math.Round(value);</code><span>四捨五入成整數 1152。<br><span class="muted">PLC 一格只能放 0～65535 的整數，這種數字在 C# 叫 ushort；(ushort) 是「把它轉成這種格式」</span></span></div>
+      <div><code>plc.WriteSingleRegister(1, 0, raw);</code><span>寫進 1 號 PLC、4 號櫃的第 1 格（40001）。<br><span class="muted">括號：哪台、哪格、多少</span></span></div>
+    </div>
+
+    <b>例子 B：讀水位，換成公分（讀進來）</b>
+    <div class="lbl">
+      <div><code>ushort raw = plc.ReadInputRegisters(1, 0, 1)[0];</code><span>從 1 號 PLC、3 號櫃第 1 格（30001），讀 1 格回來，拿第一個 → 13824。<br><span class="muted">讀回來是一排數字（陣列），[0] 是拿第一個</span></span></div>
+      <div><code>double ratio = raw / 27648.0;</code><span>① 佔幾成：13824 ÷ 27648 = 0.5（一半）。<br><span class="muted">要寫 27648.0，不然整數相除會把小數丟掉，變成 0</span></span></div>
+      <div><code>double cm = ratio * 50;</code><span>② 換到水位尺：0.5 × 50 = 25 公分。</span></div>
+      <div><code>Console.WriteLine($"水位 {cm} cm");</code><span>在畫面印出「水位 25 cm」。</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- 5b. 常見疑問：誰決定、誰翻譯 -->
+<section>
+  <div class="eyebrow">常見疑問</div>
+  <h2>誰決定放哪一格？誰負責翻譯？</h2>
+  <p>從 C# 這邊看過去，很容易以為什麼都要自己做。其實一個訊號從電線走到畫面，中間有三段，各有負責的人。</p>
+
+  <div class="panel tbl">
+    <table>
+      <thead><tr><th>段落</th><th>例子</th><th>誰做</th><th>要寫程式嗎</th><th>資料從哪來</th></tr></thead>
+      <tbody>
+        <tr class="c-ai"><td><span class="pill">① 電 → 數字</span></td><td>12 mA → 13824</td><td>模組裡的晶片，<b>自動</b>翻</td><td>不用，也沒有 library</td><td>電控工程師在 PLC 設定裡選「這個接點是 4～20 mA」；0～27648 寫在<b>模組手冊</b></td></tr>
+        <tr class="c-do"><td><span class="pill">② 數字 → 哪一格</span></td><td>13824 放進 30001</td><td>電控工程師或設備廠商，在 PLC 設定軟體裡安排</td><td>不用寫，是設定</td><td>通常有預設規則（第幾槽、第幾個接點對應第幾格），設好就<b>固定</b>；整理成<b>點位表</b>給你</td></tr>
+        <tr class="c-di"><td><span class="pill">③ 數字 → 公分</span></td><td>13824 → 25 cm</td><td><b>寫程式的人</b>（在 PLC 或 C# 都可以）</td><td><b>要</b>，就是兩把尺的公式</td><td>最高 50 cm 查<b>感測器規格書</b>或點位表</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="two">
+    <div class="panel" style="display:flex;flex-direction:column;gap:6px;min-width:0">
+      <h3>放哪一格，是我指定的嗎？</h3>
+      <p>如果你只寫 C#：<b>不是</b>。就像訪客照門牌找人，門牌是建商（電控工程師）配好的，你拿點位表照著讀就好。</p>
+      <p>如果你也負責寫 PLC：才輪到你在 PLC 的設定軟體裡安排。設定好以後就固定，不會自己跑掉。</p>
+    </div>
+    <div class="panel" style="display:flex;flex-direction:column;gap:6px;min-width:0">
+      <h3>13824 是誰翻的？</h3>
+      <p>模組硬體自動翻的，不用寫任何程式。你只需要從模組手冊知道「滿格是 27648」。</p>
+      <p>真正要動手的是下一步：把 13824 換成 25 公分。這一步沒人幫你做，要自己寫公式，最高值要查感測器規格書。</p>
+    </div>
+  </div>
+
+  <div class="rhyme" style="max-width:640px">
+    <span class="n">分工口訣</span>
+    <span class="say">模組翻數字，電控排格子，<br>程式換單位。</span>
+  </div>
+  <p class="muted">所以接一台新機器，寫 C# 之前要先拿到兩份文件：<b>點位表</b>（哪一格是什麼、單位和範圍）和<b>感測器規格</b>（最高、最低是多少）。缺了它們，程式寫得再好也會讀錯。</p>
+  <p>點位表寫錯、一直找不到那一格怎麼辦？設定畫面長什麼樣子？C# 工程師第一次接 PLC 要照什麼順序做？請看續篇 <a href="csharp-plc.html">C# 接 PLC 實戰</a>。</p>
+</section>
+
+<!-- 6. 學習路線 -->
+<section>
+  <div class="eyebrow">一次只多學一個工具</div>
+  <h2>學習路線</h2>
+  <p>每個階段只多一個新工具（標「新」的那個）。沒標的就是前面學過的，繼續用。過關了再往下走。</p>
+  <div class="path">
+    <div class="stage"><div class="rail"><div class="dot">1</div><div class="line"></div></div>
+      <div class="body"><span class="when">第 1 週・不用裝任何東西</span><h3>看懂：四種訊號、四種櫃子</h3>
+        <p>把這頁讀熟，背口訣。拿家裡的洗衣機練習：開始鍵是 DI、進水閥是 DO、水位是 AI、滾筒轉速是 AO。</p>
+        <p class="goal">看到一個設備，能說出「這是 AI，會放在 3 號或 4 號櫃」。</p></div></div>
+
+    <div class="stage"><div class="rail"><div class="dot">2</div><div class="line"></div></div>
+      <div class="body"><span class="when">第 2 週</span><h3>摸到：開一台假 PLC，打開櫃子看</h3>
+        <div class="tools">
+          <span class="tool"><b>pymodbus 模擬器</b>＝假 PLC<span class="new">新</span></span>
+          <span class="tool"><b>Modbux</b>＝看櫃子的工具<span class="new">新</span></span>
+        </div>
+        <p>在 Mac 上開一台假 PLC，用 Modbux 連進去，看 4 號櫃的數字，自己改一個數字再讀回來。</p>
+        <p class="goal">在 Modbux 改了 40001 的數字，重新讀取看得到新值。</p></div></div>
+
+    <div class="stage"><div class="rail"><div class="dot">3</div><div class="line"></div></div>
+      <div class="body"><span class="when">第 3–4 週</span><h3>C# 讀：自己寫程式拿數字</h3>
+        <div class="tools">
+          <span class="tool"><b>NModbus</b>＝C# 的 Modbus 套件<span class="new">新</span></span>
+          <span class="tool">pymodbus 模擬器</span><span class="tool">Modbux</span>
+        </div>
+        <p>Console 程式每秒讀一次，套上面的換算公式。把網路拔掉再插回去，程式要能自己重連。Modbux 同時開著，用來對答案。</p>
+        <p class="goal">畫面每秒印出「水位 25.0 cm、烘衣溫度 75.0 °C」，拔線不會當掉。</p></div></div>
+
+    <div class="stage"><div class="rail"><div class="dot">4</div><div class="line"></div></div>
+      <div class="body"><span class="when">第 5–6 週</span><h3>讓 PLC 會思考：寫一個小邏輯</h3>
+        <div class="tools">
+          <span class="tool"><b>OpenPLC</b>＝會跑程式的假 PLC<span class="new">新</span></span>
+          <span class="tool">NModbus</span><span class="tool">Modbux</span>
+        </div>
+        <p>假 PLC 只會存數字，OpenPLC 會照你寫的規則動作。照洗衣順序表寫前兩步：「按開始鍵 → 門鎖上 → 綠燈亮 → 進水閥開，水位到 25 cm 自動關水」。C# 在旁邊看每一格的變化。</p>
+        <p class="goal">C# 寫入開始鍵，看到 00003、00005、00001 依序變成 1，水位到了 00001 自己變回 0。</p></div></div>
+
+    <div class="stage"><div class="rail"><div class="dot">5</div><div class="line"></div></div>
+      <div class="body"><span class="when">第 7–8 週</span><h3>做一個迷你 SCADA</h3>
+        <div class="tools"><span class="tool">都是你會的 C#：ASP.NET Core、資料庫</span></div>
+        <p>點位表（JSON）＋定時存資料庫＋超過上限就警報＋網頁顯示。也可以接到工廠既有的系統，讓機台狀態自動回報。</p>
+        <p class="goal">網頁顯示現在第幾步；烘衣溫度超過 90 °C 跳紅色警報並記錄時間；洗好時畫面也跳「洗好了」通知。</p></div></div>
+
+    <div class="stage later"><div class="rail"><div class="dot">…</div></div>
+      <div class="body"><span class="when">工作上遇到才學</span><h3>先不用碰的東西</h3>
+        <p class="skip">OPC UA、西門子 S7、三菱 MC 協定、Ignition 等現成 SCADA、真機配線、三用電表。<br>原理跟上面一樣，都是「報位址、拿數字」，只是換一種說法。等你有一台真的機器要接，再學那一種就好。</p></div></div>
+  </div>
+</section>
+
+<!-- 7. 檢查三問 -->
+<section>
+  <div class="eyebrow">讀不到、讀錯時</div>
+  <h2>檢查口訣：先通、再讀、後對</h2>
+  <div class="checks">
+    <div class="check"><span class="q">① 通了嗎？</span>
+      <p class="muted" style="font-size:15px">電腦連得到 PLC 嗎</p>
+      <ul><li>終端機打 <code>nc -vz PLC的IP 502</code></li><li>顯示 succeeded 就是通了</li><li>不通：檢查 IP、網路線、PLC 有沒有開</li></ul></div>
+    <div class="check"><span class="q">② 別人讀得到嗎？</span>
+      <p class="muted" style="font-size:15px">用 Modbux 讀同一格</p>
+      <ul><li>Modbux 讀得到、C# 讀不到 → 改你的程式</li><li>兩個都讀不到 → 問題在 PLC 那邊</li></ul></div>
+    <div class="check"><span class="q">③ 數字對嗎？</span>
+      <p class="muted" style="font-size:15px">讀得到但數字怪</p>
+      <ul><li>是隔壁格的值 → 口訣三，位址減 1</li><li>數字超大很奇怪 → 一個小數佔兩格，順序反了</li><li>差固定倍數 → 換算公式不對</li></ul></div>
+  </div>
+</section>
+
+<!-- 8. 測試練習 -->
+<section id="quiz">
+  <div class="eyebrow">測試練習</div>
+  <h2>20 題小測驗</h2>
+  <p>每題選一個答案，選完馬上看到解答。不計分、不記名，可以一直重來。C# 括號裡的數字怎麼看，可以回頭對照 <a href="#c-args">括號裡的數字是什麼？</a>：哪台、哪格、多少。</p>
+  <div class="quiz-bar"><span>已作答 <b id="qzDone">0</b> / 20　答對 <b id="qzRight">0</b> 題</span><button type="button" id="qzReset">全部重來</button></div>
+  <div class="qz-list" id="qzList"></div>
+</section>
+
+</div>
+
+<script>
+// 測試練習：q 題目、code 題目附的程式、o 選項、a 正確答案（0 起算）、e 解說、r 相關口訣
+var QUIZ = [
+  { q: 'PLC 控制器最像下面哪一個？', o: ['一排有編號的置物櫃', '一台印表機', '一條網路線', '一個電燈開關'], a: 0,
+    e: '現場每個零件的狀態，都放在 PLC 裡固定的一格；電腦只要報櫃號，就能拿到裡面的數字。' },
+  { q: '電線上的「電」，是誰把它翻成櫃子裡的「數字」？', o: ['C# 程式', 'PLC 上的模組', '三用電表', 'SCADA 畫面'], a: 1,
+    e: 'DI 模組把 24V／0V 翻成 1／0，AI 模組把 4～20 mA 翻成 0～27648 的數字。C# 只碰得到翻好的數字。', r: '線上是電，櫃裡是數，中間靠模組翻譯' },
+  { q: '洗衣機的「開始鍵」是哪一種訊號？', o: ['DI', 'DO', 'AI', 'AO'], a: 0,
+    e: '只有按或沒按（開關），而且是現場告訴 PLC（進來），所以是 DI。', r: 'D 是開關，A 是多少；I 是耳朵，O 是手' },
+  { q: '洗衣機的「進水閥」是哪一種訊號？', o: ['DI', 'DO', 'AI', 'AO'], a: 1,
+    e: '只有開或關（開關），而且是 PLC 命令它動作（出去），所以是 DO。燈和蜂鳴器也是 DO。' },
+  { q: '洗衣機的「水位計」是哪一種訊號？', o: ['DI', 'DO', 'AI', 'AO'], a: 2,
+    e: '水位有高有低（數字），而且是量到後告訴 PLC（進來），所以是 AI。' },
+  { q: '洗衣機的「滾筒轉速設定」是哪一種訊號？', o: ['DI', 'DO', 'AI', 'AO'], a: 3,
+    e: '轉速是一個數字（洗衣 60、脫水 1200），而且是 PLC 命令馬達（出去），所以是 AO。AO 送出去的就是「設定值」，像冷氣遙控器設 26 度。' },
+  { q: '口訣「I 是耳朵，O 是手」裡，「手」代表什麼？', o: ['輸入，現場告訴 PLC', '輸出，PLC 命令現場', '類比，有大有小', '數位，只有開關'], a: 1,
+    e: 'O＝Output 輸出。耳朵負責聽（輸入），手負責動（輸出）。' },
+  { q: '櫃號 30001 開頭的「3」代表哪一種櫃子？', o: ['開關出去', '開關進來', '數字進來', '數字出去'], a: 2,
+    e: '0 開關出去、1 開關進來、3 數字進來、4 數字出去。30001 是水位計（AI）。', r: '零一開關，三四數字' },
+  { q: '哪兩種櫃子，C# 可以「寫入」？', o: ['1 和 3', '0 和 4', '1 和 4', '0 和 3'], a: 1,
+    e: '1、3 是現場量到的，只能讀；0、4 是要送出去的，程式可以寫。', r: '一三只能看，零四可以改' },
+  { q: '文件寫 40001，在 C# 程式裡要填哪個位址？', code: 'plc.ReadHoldingRegisters(1, ?, 1);', o: ['40001', '1', '0', '4'], a: 2,
+    e: '4 代表櫃子種類（由方法名稱決定），後面的 0001 是第 1 格，但程式從 0 開始數，所以填 0。', r: '說明書從 1 數，程式從 0 數' },
+  { q: '水位計是 4～20 mA，讀到 4 mA 代表？', o: ['線斷了', '水位最低（0 cm）', '水位一半', '水位滿了'], a: 1,
+    e: '4 mA 是最低、20 mA 是最滿。故意從 4 開始，把 0 留給斷線。', r: '4 是零，20 是滿，掉到 0 就是斷線' },
+  { q: '水位計的電流掉到 0 mA，最可能是？', o: ['水排乾了', '水滿出來了', '線斷了', '一切正常'], a: 2,
+    e: '水排乾是 4 mA，不是 0。正常的訊號最低也有 4 mA，所以 0 mA 代表線斷了或儀器沒電。' },
+  { q: '水位 0～50 cm，模組數字 0～27648。C# 讀到 13824，水位是幾公分？', code: 'double cm = raw / 27648.0 * 50;', o: ['13.8 cm', '25 cm', '50 cm', '100 cm'], a: 1,
+    e: '13824 ÷ 27648 = 0.5，再乘 50 = 25 公分。剛好一半。' },
+  { q: '下面哪一行 C# 是在讀「開始鍵 10001」？', o: ['<code>plc.ReadCoils(1, 0, 1)</code>', '<code>plc.ReadInputs(1, 0, 1)</code>', '<code>plc.ReadInputRegisters(1, 0, 1)</code>', '<code>plc.WriteSingleCoil(1, 0, true)</code>'], a: 1,
+    e: '1 開頭是「開關進來」，NModbus 用 ReadInputs 讀。ReadCoils 讀 0 開頭、ReadInputRegisters 讀 3 開頭。' },
+  { q: '想用 C# 讓紅燈 00007 亮起來，要用哪一行？', o: ['<code>plc.ReadCoils(1, 6, 1)</code>', '<code>plc.WriteSingleCoil(1, 6, true)</code>', '<code>plc.WriteSingleRegister(1, 6, 1)</code>', '<code>plc.ReadInputs(1, 6, 1)</code>'], a: 1,
+    e: '紅燈是 0 開頭（開關出去），要「寫」所以用 WriteSingleCoil；第 7 格從 0 數是 6；true 代表亮。', r: '零四可以改' },
+  { q: 'C# 換算時，為什麼要寫 27648.0，而不是 27648？', code: 'double cm = raw / 27648.0 * 50;', o: ['跑得比較快', '避免整數相除把小數吃掉', 'PLC 規定要這樣寫', '沒有差別'], a: 1,
+    e: 'raw 是整數，整數 ÷ 整數在 C# 會把小數丟掉：13824 / 27648 會變成 0。寫成 27648.0 才會算出 0.5。' },
+  { q: '停止鍵最好用哪一種接法？', o: ['一般接法（常開）', '常閉接法', '不用接線', '接在 AI 上'], a: 1,
+    e: '常閉接法平常是 1，按下或線斷了都變 0。線斷了機器就當作按了停止，往安全的方向錯。', r: '重要的接常閉，斷線就當停機' },
+  { q: '一般接法（常開）的開關，PLC 讀到 0，可能是什麼情況？', o: ['只可能是沒按', '沒按，或線斷了', '只可能是線斷了', '開關卡住一直按著'], a: 1,
+    e: '常開接法時，沒按和線斷了都是 0V，PLC 分不出來。要分清楚，可以在開關旁加一顆電阻。' },
+  { q: 'C# 每秒讀心跳 40002，連續 3 秒都是 1529，代表什麼？', code: 'if (hb == lastHb) stuckSeconds++;\nif (stuckSeconds >= 3) ShowOffline();', o: ['一切正常', '連線或 PLC 出問題了', '洗衣機洗好了', '數字太大要歸零'], a: 1,
+    e: 'PLC 正常時心跳每秒加 1。數字不動了，代表網路斷了，或 PLC 程式停了。SCADA 畫面要把數值變灰、標「通訊中斷」。' },
+  { q: '數字讀不到時，檢查口訣「先通、再讀、後對」的第一步是？', o: ['改 C# 程式', '確認電腦連得到 PLC（例如 nc -vz IP 502）', '換一台 PLC', '重灌電腦'], a: 1,
+    e: '先確認網路通不通；通了再用 Modbux 讀同一格；讀得到了，最後才檢查數字對不對。', r: '先通、再讀、後對' },
+];
+
+// 每一題的 C# 寫法補充（NModbus；plc 是已連線的 Modbus 主站，1 是站號）。答錯自動顯示，答對可點開
+var QCS = [
+  '// 報櫃號，拿數字：讀 30001（水位）\nushort raw = plc.ReadInputRegisters(1, 0, 1)[0];',
+  '// C# 拿到的，已經是模組翻好的數字\nushort raw = plc.ReadInputRegisters(1, 0, 1)[0];\n// raw = 13824，不是 12 mA',
+  '// 開始鍵 10001 → DI → ReadInputs\nbool start = plc.ReadInputs(1, 0, 1)[0];   // true＝按下',
+  '// 進水閥 00001 → DO → WriteSingleCoil\nplc.WriteSingleCoil(1, 0, true);   // 開進水閥\n// 實務上由 PLC 程式控制，C# 多半只讀、不直接寫',
+  '// 水位計 30001 → AI → ReadInputRegisters\nushort raw = plc.ReadInputRegisters(1, 0, 1)[0];',
+  '// 轉速設定 40001 → AO → WriteSingleRegister\n// 50 rpm ＝ 50 / 1200 × 27648 ＝ 1152\nplc.WriteSingleRegister(1, 0, 1152);',
+  '// O＝輸出：C# 寫給 PLC 的，都是「出去」\nplc.WriteSingleCoil(1, 6, true);       // DO：紅燈亮\nplc.WriteSingleRegister(1, 0, 1152);   // AO：轉速設定',
+  '// 3 開頭 → ReadInputRegisters（只能讀）\nushort temp = plc.ReadInputRegisters(1, 2, 1)[0];   // 30003 烘衣溫度',
+  '// 只有 0、4 開頭有 Write 方法\nplc.WriteSingleCoil(1, 0, true);       // 00001\nplc.WriteSingleRegister(1, 0, 1152);   // 40001\n// 1、3 開頭只有 ReadInputs、ReadInputRegisters',
+  '// 40001 → 第 1 格 → 程式填 0\nushort speed = plc.ReadHoldingRegisters(1, 0, 1)[0];\n// 40002 心跳 → 第 2 格 → 填 1\nushort hb = plc.ReadHoldingRegisters(1, 1, 1)[0];',
+  '// 4 mA → 模組給 0 → 換算後是 0 cm\nushort raw = plc.ReadInputRegisters(1, 0, 1)[0];   // 0\ndouble cm = raw / 27648.0 * 50;                     // 0',
+  '// 正常範圍是 0～27648，超出就當成訊號異常\n// （例如西門子模組，4～20 mA 斷線常會讀到 32767）\nushort raw = plc.ReadInputRegisters(1, 0, 1)[0];\nif (raw > 27648) ShowBroken();   // 不要顯示成水位',
+  'ushort raw = plc.ReadInputRegisters(1, 0, 1)[0];   // 13824\ndouble cm = raw / 27648.0 * 50;                     // 25',
+  '// 櫃號開頭 → NModbus 的讀取方法\n// 0xxxx → ReadCoils\n// 1xxxx → ReadInputs\n// 3xxxx → ReadInputRegisters\n// 4xxxx → ReadHoldingRegisters\nbool start = plc.ReadInputs(1, 0, 1)[0];   // 10001',
+  '// 00007 → 第 7 格 → 程式填 6\nplc.WriteSingleCoil(1, 6, true);    // 紅燈亮\nplc.WriteSingleCoil(1, 6, false);   // 紅燈熄',
+  'int a = 13824 / 27648;         // 0（整數相除，小數被丟掉）\ndouble b = 13824 / 27648.0;    // 0.5\ndouble cm = b * 50;             // 25',
+  '// 常閉：正常是 true，變 false 才是按了停止或斷線\nbool stopOk = plc.ReadInputs(1, 1, 1)[0];   // 10002\nif (!stopOk) ShowStopped();',
+  '// 常開讀到 false：可能沒按，也可能線斷了\nbool start = plc.ReadInputs(1, 0, 1)[0];\n// 要分清楚：改用有斷線偵測的模組＋電阻',
+  'ushort hb = plc.ReadHoldingRegisters(1, 1, 1)[0];   // 40002\nif (hb == lastHb) stuckSeconds++;\nelse { stuckSeconds = 0; lastHb = hb; }\nif (stuckSeconds >= 3) ShowOffline();   // 畫面變灰',
+  '// 先通：連不上會直接丟例外\nusing var tcp = new TcpClient();\ntcp.Connect("192.168.0.10", 502);\nvar plc = new ModbusFactory().CreateMaster(tcp);\n// 再讀：讀得到再檢查數字對不對',
+];
+
+(function () {
+  var list = document.getElementById('qzList');
+  var done = document.getElementById('qzDone'), right = document.getElementById('qzRight');
+  var esc = function (s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
+  var letters = ['A', 'B', 'C', 'D'];
+  var state = [];
+  function cs(i) {
+    return '<pre class="code">' + esc(QCS[i]).replace(/(\/\/.*)$/gm, '<span class="cm">$1</span>') + '</pre>';
+  }
+
+  function score() {
+    var d = 0, r = 0;
+    state.forEach(function (v, i) { if (v != null) { d++; if (v === QUIZ[i].a) r++; } });
+    done.textContent = d; right.textContent = r;
+  }
+
+  function answer(i, k, card) {
+    if (state[i] != null) return;
+    state[i] = k;
+    var Q = QUIZ[i];
+    card.querySelectorAll('.opt').forEach(function (b, j) {
+      b.disabled = true;
+      if (j === Q.a) b.classList.add('right');
+      else if (j === k) b.classList.add('wrong');
+    });
+    var ok = k === Q.a;
+    var box = document.createElement('div');
+    box.className = 'ans';
+    box.innerHTML = '<span class="verdict-t ' + (ok ? 'ok' : 'no') + '">' + (ok ? '✓ 答對了' : '✗ 答錯了，正確答案是 ' + letters[Q.a]) + '</span>' +
+      '<span>' + Q.e + '</span>' + (Q.r ? '<span><span class="tagr">口訣</span>' + Q.r + '</span>' : '') +
+      (ok ? '<details><summary style="cursor:pointer;color:var(--accent)">看 C# 寫法</summary>' + cs(i) + '</details>'
+          : '<b style="color:var(--accent)">C# 寫法補充</b>' + cs(i));
+    card.appendChild(box);
+    score();
+  }
+
+  function render() {
+    state = QUIZ.map(function () { return null; });
+    list.innerHTML = '';
+    QUIZ.forEach(function (Q, i) {
+      var card = document.createElement('div');
+      card.className = 'qz';
+      card.innerHTML = '<span class="qn">第 ' + (i + 1) + ' 題</span><span class="qt">' + Q.q + '</span>' +
+        (Q.code ? '<pre class="code">' + esc(Q.code) + '</pre>' : '') + '<div class="opts"></div>';
+      var opts = card.querySelector('.opts');
+      Q.o.forEach(function (t, k) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'opt';
+        b.id = 'qz' + i + '-' + k;
+        b.innerHTML = '<b>' + letters[k] + '.</b> ' + t;
+        b.addEventListener('click', function () { answer(i, k, card); });
+        opts.appendChild(b);
+      });
+      list.appendChild(card);
+    });
+    score();
+  }
+
+  document.getElementById('qzReset').addEventListener('click', render);
+  render();
+})();
+</script>
+<script>
+(function () {
+  var ma = document.getElementById('ma');
+  function upd() {
+    var v = parseFloat(ma.value);
+    var broken = v < 3.8;
+    var raw = broken ? 0 : Math.round(Math.max(0, Math.min(1, (v - 4) / 16)) * 27648);
+    var cm = raw / 27648 * 50;
+    document.getElementById('maTxt').textContent = v.toFixed(1) + ' mA';
+    document.getElementById('m1').textContent = v.toFixed(1) + ' mA';
+    document.getElementById('m2').textContent = String(raw);
+    document.getElementById('m3').textContent = broken ? '—' : cm.toFixed(1) + ' cm';
+    document.getElementById('m4').innerHTML = broken
+      ? '<span class="status bad">斷線！不是 0 cm</span>'
+      : '<span class="status ok">正常</span>';
+  }
+  ma.addEventListener('input', upd);
+  upd();
+})();
+</script>

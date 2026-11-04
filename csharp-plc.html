@@ -1,0 +1,598 @@
+<!doctype html>
+<html lang="zh-Hant">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>C# 接 PLC 實戰</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@400;700&family=Noto+Sans+TC:wght@400;500;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* 版面：延續《SCADA 入門圖解》的手冊風格；示意畫面用「視窗」外框，錯誤點一律紅色標註 */
+:root {
+  --bg: #f2f4f3; --surface: #ffffff; --ink: #17201c; --muted: #56635d; --line: #cdd6d1;
+  --accent: #0f6b5c; --win-bar: #e3e8e5; --field: #f7f9f8;
+  --di: #2b8a4b; --do: #b9720c; --ai: #2a68ad; --ao: #8648b4; --bad: #c0392b;
+  --f-hand: "LXGW WenKai TC", "Kaiti TC", "STKaiti", serif;
+  --f-body: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #111614; --surface: #1a221f; --ink: #e5ebe8; --muted: #9caaa3; --line: #34413b;
+  --accent: #4fc3ad; --win-bar: #232d29; --field: #141a18;
+  --di: #5cc47c; --do: #e8a43c; --ai: #6ea8ec; --ao: #bb8ce2; --bad: #ef6b5b; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #111614; --surface: #1a221f; --ink: #e5ebe8; --muted: #9caaa3; --line: #34413b;
+  --accent: #4fc3ad; --win-bar: #232d29; --field: #141a18;
+  --di: #5cc47c; --do: #e8a43c; --ai: #6ea8ec; --ao: #bb8ce2; --bad: #ef6b5b; color-scheme: dark }
+
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 16px; line-height: 1.75; }
+.wrap { max-width: 920px; margin: 0 auto; padding-block: 40px 80px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: 56px; }
+h1, h2, h3 { text-wrap: balance; line-height: 1.35; margin: 0; }
+h1 { font-family: var(--f-hand); font-size: clamp(30px, 5vw, 44px); }
+h2 { font-family: var(--f-hand); font-size: clamp(24px, 3.6vw, 30px); }
+h3 { font-size: 17px; }
+p { margin: 0; max-width: 65ch; }
+a { color: var(--accent); }
+section { display: flex; flex-direction: column; gap: 16px; }
+.eyebrow { font-size: 13px; letter-spacing: .12em; color: var(--accent); font-weight: 700; }
+.lead { color: var(--muted); font-size: 17px; }
+.muted { color: var(--muted); }
+.mono { font-family: var(--f-mono); }
+code { font-family: var(--f-mono); font-size: .92em; background: color-mix(in srgb, var(--accent) 10%, var(--surface)); padding: 1px 6px; border-radius: 4px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.tbl { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; }
+th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 13px; color: var(--muted); font-weight: 500; letter-spacing: .05em; white-space: nowrap; }
+.bad { color: var(--bad); font-weight: 700; }
+.c-di { --c: var(--di); } .c-do { --c: var(--do); } .c-ai { --c: var(--ai); } .c-ao { --c: var(--ao); } .c-hb { --c: var(--accent); }
+
+/* 答案先講 */
+.answer { border-left: 4px solid var(--accent); background: var(--surface); border-radius: 0 12px 12px 0; padding: 16px 20px; display: flex; flex-direction: column; gap: 8px; }
+.answer b.big { font-size: 20px; }
+
+/* 示意視窗 */
+.win { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; min-width: 0; }
+.win .bar { background: var(--win-bar); display: flex; align-items: center; gap: 10px; padding: 8px 12px; font-size: 13px; color: var(--muted); }
+.win .bar i { width: 10px; height: 10px; border-radius: 50%; background: var(--line); display: inline-block; }
+.win .bar span { margin-left: 4px; }
+.win .bar em { margin-left: auto; font-style: normal; font-size: 12px; border: 1px solid var(--line); border-radius: 99px; padding: 0 8px; }
+.win .body { padding: 14px; display: flex; flex-direction: column; gap: 12px; overflow-x: auto; }
+.win table { font-size: 14px; }
+.win td, .win th { padding: 6px 8px; }
+.win .row-bad td { background: color-mix(in srgb, var(--bad) 10%, var(--surface)); }
+.callout { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; border: 1.5px dashed var(--bad); border-radius: 10px; padding: 10px 12px; color: var(--ink); background: color-mix(in srgb, var(--bad) 6%, var(--surface)); }
+.callout b { color: var(--bad); white-space: nowrap; }
+.sel { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line); background: var(--field); border-radius: 6px; padding: 2px 10px; font-family: var(--f-mono); font-size: 13px; }
+.sel::after { content: "▾"; color: var(--muted); }
+.sel.wrong { border-color: var(--bad); color: var(--bad); }
+.field { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--muted); }
+.field span { font-family: var(--f-mono); font-size: 14px; color: var(--ink); border: 1px solid var(--line); background: var(--field); border-radius: 6px; padding: 3px 8px; }
+.fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.regs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.reg { border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font-family: var(--f-mono); font-size: 13px; display: flex; flex-direction: column; background: var(--field); min-width: 0; }
+.reg small { color: var(--muted); font-size: 11px; }
+.reg.hot { border-color: var(--ai); background: color-mix(in srgb, var(--ai) 14%, var(--surface)); }
+.reg.hot b { color: var(--ai); }
+.flow4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.flow4 div { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--surface); font-size: 14px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.flow4 b { font-size: 15px; }
+.flow4 .tag { font-family: var(--f-mono); font-size: 12px; color: var(--accent); font-weight: 700; }
+svg text { font-family: var(--f-body); fill: var(--ink); }
+svg .rail { fill: var(--win-bar); stroke: var(--line); }
+svg .mod { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; }
+svg .modc { fill: color-mix(in srgb, var(--c) 12%, var(--surface)); stroke: var(--c); stroke-width: 1.5; }
+svg .modsel { stroke-width: 3; }
+svg .led { fill: var(--c); }
+svg .t-muted { fill: var(--muted); }
+
+/* 一行程式、一句白話 */
+.lbl { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
+.lbl > div { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 14px; padding: 9px 14px; border-top: 1px solid var(--line); align-items: start; }
+.lbl > div:first-child { border-top: none; }
+.lbl > div.sub { background: color-mix(in srgb, var(--accent) 7%, var(--surface)); font-size: 13px; color: var(--accent); font-weight: 700; padding-block: 5px; }
+.lbl code { display: block; font-size: 13px; background: none; padding: 0; overflow-wrap: anywhere; white-space: pre-wrap; color: var(--ink); }
+.lbl > div > span { font-size: 15px; }
+.lbl .muted { font-size: 13.5px; }
+pre.code { margin: 0; font-family: var(--f-mono); font-size: 13.5px; line-height: 1.6; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; overflow-x: auto; white-space: pre; }
+pre.code .cm { color: var(--muted); }
+
+/* 開工步驟 */
+.steps { display: flex; flex-direction: column; }
+.step { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 14px; }
+.step .rail2 { display: flex; flex-direction: column; align-items: center; }
+.step .dot { width: 34px; height: 34px; border-radius: 50%; background: var(--accent); color: var(--surface); display: grid; place-items: center; font-weight: 700; font-family: var(--f-mono); flex: none; }
+.step .ln { flex: 1; width: 2px; background: var(--line); margin-block: 4px; }
+.step .bd { padding-bottom: 22px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.step .ok { font-size: 14px; color: var(--accent); }
+.step .ok::before { content: "做到這樣再往下："; font-weight: 700; }
+
+.rhyme { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 6px; max-width: 620px; }
+.rhyme .n { font-size: 13px; color: var(--muted); letter-spacing: .08em; }
+.rhyme .say { font-family: var(--f-hand); font-size: 26px; line-height: 1.5; font-weight: 700; }
+
+figure.shot { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+figure.shot img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 10px; }
+figure.shot figcaption { font-size: 15px; }
+.copybox { display: flex; flex-direction: column; gap: 8px; }
+.copybox textarea { width: 100%; box-sizing: border-box; min-height: 230px; font: 14px/1.7 var(--f-body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; resize: vertical; }
+.copybox button { align-self: flex-start; font: inherit; font-size: 14px; color: var(--surface); background: var(--accent); border: none; border-radius: 8px; padding: 8px 16px; cursor: pointer; }
+.copybox button:focus-visible, .copybox textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+@media (max-width: 680px) {
+  .two, .flow4 { grid-template-columns: minmax(0, 1fr); }
+  .lbl > div { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .regs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+</style>
+
+<div class="wrap">
+
+<header style="display:flex;flex-direction:column;gap:12px">
+  <div class="eyebrow">《SCADA 入門圖解》續篇・例子一樣是那台洗脫烘洗衣機</div>
+  <h1>C# 接 PLC 實戰</h1>
+  <p class="lead">照著點位表一直改、一直測，卻怎麼都找不到那一格。這一頁說明為什麼會這樣、問題可能出在哪個設定畫面，以及 C# 工程師第一次接 PLC 時，該照什麼順序做。</p>
+  <p class="muted" style="font-size:14px">基礎觀念（置物櫃、四種訊號、櫃號、口訣）請先看 <a href="index.html">SCADA 入門圖解</a>。本頁的設定畫面都是示意圖，各品牌軟體長得不一樣，但要設定的東西是同一套。</p>
+</header>
+
+<!-- 1. 會發生嗎 -->
+<section>
+  <div class="eyebrow">先回答</div>
+  <h2>PLC 工程師放錯，會發生嗎？</h2>
+  <div class="answer">
+    <b class="big">會，而且很常見。</b>
+    <p>最常見的是 PLC 程式改過了，點位表卻沒跟著更新。你照著舊文件找，當然找不到。還有一個常見的方向錯誤：一直在找「13824 這個數字」。這個數字會隨現場一直變，量程設定不同也不會是 13824，別的格子還可能剛好出現一樣的數字。</p>
+    <p><b>正確做法是：不找數字，找會跟著現場一起動的格子。</b>做法在第 3 節。</p>
+  </div>
+  <div class="panel tbl">
+    <h3>對不上的 8 個常見原因</h3>
+    <table>
+      <thead><tr><th>原因</th><th>你會看到</th><th>誰要改</th></tr></thead>
+      <tbody>
+        <tr><td>點位表沒更新（PLC 改了，文件沒改）</td><td>格子和現場對不上</td><td>PLC 工程師更新點位表</td></tr>
+        <tr><td>位址差一格（文件從 1 數，還是從 0 數沒寫清楚）</td><td>讀到隔壁格的值</td><td>你：位址加減 1 試試</td></tr>
+        <tr><td>站號不對</td><td>全部讀不到，等很久才報錯</td><td>問 PLC 工程師站號</td></tr>
+        <tr><td>櫃子種類用錯（3 號櫃的東西，用讀 4 號櫃的方法）</td><td>PLC 回「這格不存在」，或讀到別的數字</td><td>你：換讀取方法</td></tr>
+        <tr><td>模組量程設錯（感測器是 4～20 mA，模組設成 0～10 V）</td><td>數字範圍怪，永遠到不了滿格</td><td>PLC 工程師改模組設定</td></tr>
+        <tr><td>電線接到別的接點</td><td>動 A，結果是 B 那格在變</td><td>現場改線，或改點位表</td></tr>
+        <tr><td>一個數字佔兩格（小數、32 位元）</td><td>兩格一起變，數字很大很怪</td><td>你：兩格合起來讀</td></tr>
+        <tr><td>換算範圍錯（以為最高 50 cm，其實是 100 cm）</td><td>格子對、會動，但換算差一倍</td><td>對感測器規格書</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- 2. 四個設定畫面 -->
+<section>
+  <div class="eyebrow">設定畫面（示意）</div>
+  <h2>一條訊號會經過的 4 個畫面</h2>
+  <p>從電線到你的 C#，中間有四個地方要設定或記錄。前兩個在 PLC 工程師的電腦裡，第三個是文件，第四個是你自己驗證用的工具。任何一個沒對上，你就會找不到。</p>
+  <div class="flow4">
+    <div><span class="tag">畫面 A</span><b>硬體組態</b><span class="muted">電 → 數字</span></div>
+    <div><span class="tag">畫面 B</span><b>Modbus 對照</b><span class="muted">數字 → 哪一格</span></div>
+    <div><span class="tag">畫面 C</span><b>點位表</b><span class="muted">寫成文件給你</span></div>
+    <div><span class="tag">畫面 D</span><b>測試工具</b><span class="muted">你親手驗證</span></div>
+  </div>
+
+  <!-- A -->
+  <div class="win">
+    <div class="bar"><i></i><i></i><i></i><span>畫面 A｜PLC 設定軟體：硬體組態</span><em>PLC 工程師的電腦</em></div>
+    <div class="body">
+      <svg viewBox="0 0 560 170" role="img" aria-label="PLC 機架：電源、CPU、第 1 槽 DI、第 2 槽 DO、第 3 槽 AI 被選取" style="min-width:460px">
+        <rect x="6" y="28" width="548" height="132" rx="8" class="rail"/>
+        <text x="60" y="20" font-size="12" text-anchor="middle" class="t-muted">電源</text>
+        <text x="150" y="20" font-size="12" text-anchor="middle" class="t-muted">CPU</text>
+        <text x="240" y="20" font-size="12" text-anchor="middle" class="t-muted">第 1 槽</text>
+        <text x="330" y="20" font-size="12" text-anchor="middle" class="t-muted">第 2 槽</text>
+        <text x="420" y="20" font-size="12" text-anchor="middle" class="t-muted">第 3 槽</text>
+        <text x="510" y="20" font-size="12" text-anchor="middle" class="t-muted">第 4 槽</text>
+        <rect x="22" y="40" width="76" height="108" rx="6" class="mod"/><text x="60" y="98" font-size="13" text-anchor="middle">電源</text>
+        <rect x="112" y="40" width="76" height="108" rx="6" class="mod"/><text x="150" y="98" font-size="13" text-anchor="middle">CPU</text>
+        <g class="c-di"><rect x="202" y="40" width="76" height="108" rx="6" class="modc"/><text x="240" y="70" font-size="13" text-anchor="middle" font-weight="700">DI</text><text x="240" y="88" font-size="11" text-anchor="middle" class="t-muted">8 個接點</text>
+          <circle cx="226" cy="110" r="4" class="led"/><circle cx="240" cy="110" r="4" class="led"/><circle cx="254" cy="110" r="4" class="led"/><circle cx="226" cy="124" r="4" class="led" opacity=".3"/><circle cx="240" cy="124" r="4" class="led" opacity=".3"/></g>
+        <g class="c-do"><rect x="292" y="40" width="76" height="108" rx="6" class="modc"/><text x="330" y="70" font-size="13" text-anchor="middle" font-weight="700">DO</text><text x="330" y="88" font-size="11" text-anchor="middle" class="t-muted">8 個接點</text>
+          <circle cx="316" cy="110" r="4" class="led"/><circle cx="330" cy="110" r="4" class="led" opacity=".3"/><circle cx="344" cy="110" r="4" class="led"/></g>
+        <g class="c-ai"><rect x="382" y="40" width="76" height="108" rx="6" class="modc modsel"/><text x="420" y="70" font-size="13" text-anchor="middle" font-weight="700">AI</text><text x="420" y="88" font-size="11" text-anchor="middle" class="t-muted">4 個通道</text><text x="420" y="128" font-size="11" text-anchor="middle">▲ 選取中</text></g>
+        <rect x="472" y="40" width="76" height="108" rx="6" class="mod" stroke-dasharray="4 4"/><text x="510" y="98" font-size="12" text-anchor="middle" class="t-muted">空</text>
+      </svg>
+      <div class="tbl"><table>
+        <thead><tr><th>AI 模組（第 3 槽）</th><th>接什麼</th><th>量程</th></tr></thead>
+        <tbody>
+          <tr><td>通道 0</td><td>水位計</td><td><span class="sel">4–20 mA</span></td></tr>
+          <tr><td>通道 1</td><td>水溫計</td><td><span class="sel">4–20 mA</span></td></tr>
+          <tr class="row-bad"><td>通道 2</td><td>烘衣溫度計</td><td><span class="sel wrong">0–10 V</span></td></tr>
+        </tbody>
+      </table></div>
+      <div class="callout"><b>錯在這裡</b><span>烘衣溫度計送的是 4～20 mA，模組卻設成 0～10 V。模組照錯的方式翻譯，你讀到的數字就會怪，換算也不會對。這是 PLC 工程師要改的設定，C# 改不了。</span></div>
+    </div>
+  </div>
+
+  <!-- B -->
+  <div class="win">
+    <div class="bar"><i></i><i></i><i></i><span>畫面 B｜PLC 設定軟體：Modbus 對照表</span><em>PLC 工程師的電腦</em></div>
+    <div class="body">
+      <div class="tbl"><table>
+        <thead><tr><th>程式裡的名字</th><th>接在哪裡</th><th>Modbus 櫃號</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">StartBtn</td><td>DI 模組・接點 1</td><td class="mono">10001</td></tr>
+          <tr><td class="mono">DoorClosed</td><td>DI 模組・接點 3</td><td class="mono">10003</td></tr>
+          <tr class="row-bad"><td class="mono">WaterLevel</td><td>AI 模組・通道 0</td><td class="mono bad">30003</td></tr>
+          <tr><td class="mono">DrumSpeed</td><td>AO 模組・通道 0</td><td class="mono">40001</td></tr>
+          <tr><td class="mono">Heartbeat</td><td>PLC 內部（不接線）</td><td class="mono">40002</td></tr>
+        </tbody>
+      </table></div>
+      <div class="callout"><b>錯在這裡</b><span>PLC 工程師上週調整程式，把水位從 30001 改到 30003，但沒有通知你、也沒更新點位表。這張才是 PLC 真正的設定，點位表只是它的影本。</span></div>
+      <p class="muted" style="font-size:13.5px">注意：畫面 B 是簡化的示意。真實世界裡，「哪一格」不一定是一張表，各品牌做法不同，見下面「真的軟體長怎樣？」。</p>
+    </div>
+  </div>
+
+  <!-- C -->
+  <div class="win">
+    <div class="bar"><i></i><i></i><i></i><span>畫面 C｜點位表（試算表）</span><em>給你的文件・版本 2026-10-20</em></div>
+    <div class="body">
+      <div class="tbl"><table>
+        <thead><tr><th>櫃號</th><th>名稱</th><th>類型</th><th>範圍</th><th>單位</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">10001</td><td>開始鍵</td><td>DI</td><td>0／1</td><td>—</td></tr>
+          <tr><td class="mono">10003</td><td>門關好</td><td>DI</td><td>0／1</td><td>—</td></tr>
+          <tr class="row-bad"><td class="mono bad">30001</td><td>水位</td><td>AI</td><td>0～27648 → 0～50</td><td>cm</td></tr>
+          <tr><td class="mono">40001</td><td>滾筒轉速設定</td><td>AO</td><td>0～27648 → 0～1200</td><td>rpm</td></tr>
+          <tr><td class="mono">40002</td><td>心跳計數器</td><td>內部</td><td>每秒 +1</td><td>—</td></tr>
+        </tbody>
+      </table></div>
+      <div class="callout"><b>錯在這裡</b><span>點位表還寫 30001，跟畫面 B 的 30003 對不上。這就是「照點位表一直改、一直找不到」的典型情況。拿到點位表，一定要看<b style="color:inherit">版本日期</b>，並問一句「這是最新的嗎？」</span></div>
+    </div>
+  </div>
+
+  <!-- D -->
+  <div class="win">
+    <div class="bar"><i></i><i></i><i></i><span>畫面 D｜Modbus 測試工具（例如 Modbux）</span><em>你的電腦</em></div>
+    <div class="body">
+      <div class="fields">
+        <div class="field">IP 位址<span>192.168.0.10</span></div>
+        <div class="field">Port<span>502</span></div>
+        <div class="field">站號<span>1</span></div>
+        <div class="field">要讀的櫃子<span>3xxxx 輸入暫存器</span></div>
+        <div class="field">起始位址（從 0 數）<span>0</span></div>
+        <div class="field">讀幾格<span>10</span></div>
+      </div>
+      <div class="regs">
+        <div class="reg"><small>30001</small><b>0</b></div>
+        <div class="reg"><small>30002</small><b>8294</b></div>
+        <div class="reg hot"><small>30003 ▲ 一直在變</small><b>13824</b></div>
+        <div class="reg"><small>30004</small><b>0</b></div>
+        <div class="reg"><small>30005</small><b>0</b></div>
+        <div class="reg"><small>30006</small><b>0</b></div>
+        <div class="reg"><small>30007</small><b>0</b></div>
+        <div class="reg"><small>30008</small><b>0</b></div>
+        <div class="reg"><small>30009</small><b>0</b></div>
+        <div class="reg"><small>30010</small><b>0</b></div>
+      </div>
+      <p style="font-size:14px">現場一邊加水，30001 一直是 0，<b>30003 卻跟著上升</b>。這就證明點位表過期了，水位其實在 30003。</p>
+      <div class="callout" style="border-color:var(--accent);background:color-mix(in srgb, var(--accent) 6%, var(--surface))"><b style="color:var(--accent)">為什麼先用工具</b><span>工具讀得到、C# 讀不到，是你的程式問題；工具也讀不到，是 PLC 或文件的問題。先用工具，就不會在錯的地方找半天。</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- 2b. 真實軟體 -->
+<section>
+  <div class="eyebrow">對照真實世界</div>
+  <h2>真的軟體長怎樣？</h2>
+  <p>台灣工廠常見的 PLC 有三菱、西門子、台達、歐姆龍、永宏等，每家的設定軟體都不一樣。<b>畫面 A 各家都很像</b>：先畫出一排模組，點選 AI 模組，在屬性裡選量程。<b>畫面 B 差很多</b>：</p>
+  <div class="panel tbl"><table>
+    <thead><tr><th>PLC</th><th>畫面 A：硬體組態</th><th>畫面 B：「哪一格」怎麼決定</th></tr></thead>
+    <tbody>
+      <tr><td>西門子 S7-1200／1500<br><span class="muted">軟體：TIA Portal</span></td><td>「裝置組態」：點選模組 → 屬性 → 量測類型、量程</td><td><b>沒有對照表。</b>PLC 工程師在程式裡放一個 <span class="mono">MB_SERVER</span> 功能塊，指定一塊資料區（DB）當 4 號櫃；資料區裡第 1 個數字就是 40001，依序排下去。開關類則自動對應 PLC 的輸入輸出區</td></tr>
+      <tr><td>三菱 FX5U<br><span class="muted">軟體：GX Works3</span></td><td>「模組構成圖」：點選模組 → 參數</td><td>在 CPU 的乙太網路參數裡開 Modbus/TCP，可以設定哪些格子對應到 PLC 內部哪些位置，比較接近畫面 B 的表格</td></tr>
+      <tr><td>台達 DVP<br><span class="muted">軟體：ISPSoft 等</span></td><td>模組設定畫面</td><td><b>原廠固定好</b>，寫在該型號手冊的「Modbus 位址表」，不能改。你直接查手冊</td></tr>
+      <tr><td>OpenPLC（免費，第 4 階段會用）</td><td>專案裡的硬體設定</td><td>依變數類型固定排好，例如 %IW 開頭放 3 號櫃、%QW 開頭放 4 號櫃。官方文件有對照表</td></tr>
+    </tbody>
+  </table></div>
+  <p>所以「誰決定放哪一格」要分品牌看：西門子是 PLC 工程師在程式裡決定，三菱是在參數裡設定，台達是原廠固定。<b>不管哪一家，C# 工程師都是拿點位表或手冊來核對，再用「找會動的格子」確認。</b></p>
+  <div class="panel">
+    <h3>想看真實畫面，去這裡</h3>
+    <ul style="margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:6px">
+      <li>西門子官方中文入門文件（有 TIA Portal 截圖，2015 年版，新版畫面會有些不同）：<a href="https://support.industry.siemens.com/cs/attachments/81015512/S7-1200_ModbusTCP_Communication_Getting_Start201510.pdf" target="_blank" rel="noopener">S7-1200 Modbus TCP 通訊入門 PDF</a></li>
+      <li>OpenPLC 官方文件：<a href="https://edge.autonomylogic.com/docs/openplc-editor/communication/modbus/addressing" target="_blank" rel="noopener">Modbus 位址對照</a>、<a href="https://edge.autonomylogic.com/docs/openplc-editor/communication/modbus/server" target="_blank" rel="noopener">Modbus 伺服器設定</a></li>
+      <li>三菱、台達：請查你那台型號的官方手冊（三菱找「MODBUS 通訊」篇，台達找「Modbus 位址表」）。網路教學的說法常常互相矛盾，以官方手冊為準</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 2c. OpenPLC 真實畫面 -->
+<section id="real">
+  <div class="eyebrow">真實畫面・2026-11-03 在這台 Mac 實際跑過</div>
+  <h2>用 OpenPLC 實際走一次</h2>
+  <p>OpenPLC 是免費、開源的 PLC，可以在電腦上跑。我把洗衣機練習程式（<span class="mono">washer.st</span>）放進去，從上傳、編譯、啟動到 C# 讀數字，每一步都是真的畫面。因為沒有接真的感測器，水位用程式模擬，放在 <span class="mono">40003</span>。</p>
+
+  <figure class="shot">
+    <img src="shots/02-programs-upload.png" alt="OpenPLC Programs 頁面：上方是已上傳的程式清單，下方 Upload Program 選了 washer.st" loading="lazy">
+    <figcaption><b>① 上傳程式（Programs）</b>　選好 <span class="mono">washer.st</span>，按 Upload Program。這是 PLC 工程師的工作，相當於把寫好的程式放進 PLC。</figcaption>
+  </figure>
+
+  <figure class="shot">
+    <img src="shots/04-compile-log.png" alt="OpenPLC 編譯畫面，列出 __IX0_0、__QX0_0、__QW0 等有位址的變數" loading="lazy">
+    <figcaption><b>② 編譯（Compiling program）</b>　把程式翻成 PLC 能跑的版本。下面那串 <span class="mono">__IX0_0</span>、<span class="mono">__QW1</span>，就是程式裡「有位址」的變數，也就是之後 C# 讀得到的格子。最後看到 <span class="mono">Compilation finished successfully!</span> 才算成功。</figcaption>
+  </figure>
+
+  <figure class="shot">
+    <img src="shots/06b-monitoring-later.png" alt="OpenPLC 監看畫面：每個變數的名字、型別、位址與即時數值，GreenLamp 為 TRUE，Heartbeat 17，WaterLevel 23494" loading="lazy">
+    <figcaption><b>③ 監看（Monitoring）＝真實版的畫面 B</b>　上方顯示 <span class="mono">Running: Washer practice</span>，表示 PLC 在跑。表格每一列是一個變數：名字（Point Name）、位址（Location）、現在的值（Value）。心跳 17、水位 23494 會一直變。</figcaption>
+  </figure>
+  <div class="panel tbl">
+    <h3>Location 怎麼換成 Modbus 櫃號（OpenPLC 的固定規則）</h3>
+    <table>
+      <thead><tr><th>監看畫面的名字</th><th>Location</th><th>Modbus 櫃號</th><th>C# 怎麼讀</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">StartBtn</td><td class="mono">%IX0.0</td><td class="mono">10001</td><td class="mono">ReadInputs(1, 0, 1)</td></tr>
+        <tr><td class="mono">InletValve</td><td class="mono">%QX0.0</td><td class="mono">00001</td><td class="mono">ReadCoils(1, 0, 1)</td></tr>
+        <tr><td class="mono">GreenLamp</td><td class="mono">%QX0.4</td><td class="mono">00005</td><td class="mono">ReadCoils(1, 4, 1)</td></tr>
+        <tr><td class="mono">DrumSpeed</td><td class="mono">%QW0</td><td class="mono">40001</td><td class="mono">ReadHoldingRegisters(1, 0, 1)</td></tr>
+        <tr><td class="mono">Heartbeat</td><td class="mono">%QW1</td><td class="mono">40002</td><td class="mono">ReadHoldingRegisters(1, 1, 1)</td></tr>
+        <tr><td class="mono">WaterLevel</td><td class="mono">%QW2</td><td class="mono">40003</td><td class="mono">ReadHoldingRegisters(1, 2, 1)</td></tr>
+      </tbody>
+    </table>
+    <p class="muted" style="font-size:14px">規則：<span class="mono">%IX</span> 開關進來 → 1 號櫃；<span class="mono">%QX</span> 開關出去 → 0 號櫃；<span class="mono">%IW</span> 數字進來 → 3 號櫃；<span class="mono">%QW</span> 數字出去 → 4 號櫃。後面的數字就是第幾格（從 0 數）。開關類的 <span class="mono">%QX0.4</span> 是「第 0 組的第 4 個」，換成格子是 0×8＋4＝4。</p>
+  </div>
+
+  <figure class="shot">
+    <img src="shots/07-settings.png" alt="OpenPLC 設定畫面：Enable Modbus Server 打勾，Modbus Server Port 502" loading="lazy">
+    <figcaption><b>④ 設定（Settings）</b>　<span class="mono">Enable Modbus Server</span> 打勾、Port 是 <span class="mono">502</span>。C# 能連進來，就是因為這裡開著。如果這裡沒勾，C# 會一直連不上。</figcaption>
+  </figure>
+
+  <div class="panel">
+    <h3>⑤ C# 真的讀到了（實際執行的輸出）</h3>
+    <p style="font-size:15px">程式在 <span class="mono">openplc/csharp-test/Program.cs</span>，就是本頁第 3、6 節的寫法，用 <code>dotnet run</code> 執行：</p>
+<pre class="code">== 1. 先對心跳（40002）==
+心跳 111
+心跳 112
+心跳 113
+== 2. 掃描 40001～40010，找會動的格子 ==
+40002 變了：114 → 115
+40003 變了：12438 → 13820
+40002 變了：115 → 116
+40003 變了：13820 → 15202
+== 3. 換算水位（40003）==
+原始數字 17966 → 水位 32.5 cm
+== 4. 讀開關 00001～00008 ==
+00001 進水閥 False，00005 綠燈 True，00007 紅燈 False
+== 5. 讀 30001（沒接線）==
+30001 = 0</pre>
+    <p style="font-size:15px">掃描程式自己找出「會動的是 40002 和 40003」，跟監看畫面完全對得上。30001 是 0，因為這台 OpenPLC 沒有接感測器，這也是第 8 節「一直是 0」的真實例子。</p>
+  </div>
+
+  <div class="panel">
+    <h3>實際踩到的 3 個坑</h3>
+    <ul style="margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:6px;font-size:15px">
+      <li><b>程式註解寫中文，編譯失敗。</b>OpenPLC 的編譯器不吃中文，出現 7 個錯誤。改成英文註解就過了。</li>
+      <li><b>監看畫面一開始是空的。</b>它只認「一行一個變數、只用一個空格、同一行不能有註解」的寫法。改寫法後才出現。</li>
+      <li><b>編譯還沒完成就按啟動，PLC 卡住。</b>要等看到 <span class="mono">Compilation finished successfully!</span> 再按 Start PLC。卡住時把整個 OpenPLC 重新啟動就好。</li>
+    </ul>
+    <p class="muted" style="font-size:14px">真實工作也是這樣：工具都有自己的規矩，手冊沒寫的，就要看錯誤訊息一步一步試。</p>
+  </div>
+
+  <div class="panel">
+    <h3>想自己再跑一次</h3>
+<pre class="code"><span class="cm"># 1. 依 OpenPLC 官方說明安裝並啟動，瀏覽器打開（帳號密碼預設 openplc）</span>
+open http://localhost:8080
+<span class="cm"># 2. 在 Programs 上傳 code/washer.st，編譯完成後按 Start PLC</span>
+<span class="cm"># 3. 執行 C#（需要 .NET 8）</span>
+cd code/csharp-test
+dotnet run</pre>
+  </div>
+</section>
+
+<!-- 3. 找會動的格子 -->
+<section>
+  <div class="eyebrow">最重要的一招</div>
+  <h2>不找數字，找會動的格子</h2>
+  <p>兩個人配合：一個人在現場改變一個訊號（按住開始鍵、加一點水），你在電腦前看哪一格跟著變。變的那一格，就是它真正的位置。這在工廠叫「點對點測試」。</p>
+  <div class="two">
+    <div class="panel">
+      <h3>現場動作前</h3>
+      <div class="regs" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+        <div class="reg"><small>30001</small><b>0</b></div><div class="reg"><small>30002</small><b>8294</b></div><div class="reg"><small>30003</small><b>4120</b></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>現場加水之後</h3>
+      <div class="regs" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+        <div class="reg"><small>30001</small><b>0</b></div><div class="reg"><small>30002</small><b>8294</b></div><div class="reg hot"><small>30003 變了</small><b>13824</b></div>
+      </div>
+    </div>
+  </div>
+  <p>人眼盯著十幾格很累，交給 C# 掃描：每秒讀一排，哪一格變了就印出來。</p>
+
+  <div class="lbl">
+    <div class="sub">C# 掃描程式：找出會動的格子</div>
+    <div><code>ushort[] last = null;</code><span>上一次讀到的那一排數字。一開始還沒讀過，先放空的。<br><span class="muted">null＝空的、還沒有東西</span></span></div>
+    <div><code>while (true)</code><span>一直重複做下面的事，直到你按 Ctrl+C 停止。</span></div>
+    <div><code>{</code><span></span></div>
+    <div><code>  ushort[] now = plc.ReadInputRegisters(1, 0, 20);</code><span>從第 0 格開始，連讀 20 格，也就是 30001～30020。<br><span class="muted">括號：哪台、哪格、讀幾格</span></span></div>
+    <div><code>  if (last != null)</code><span>如果有上一次的資料（第二輪以後），才拿來比。<br><span class="muted">!=＝不等於</span></span></div>
+    <div><code>    for (int i = 0; i &lt; now.Length; i++)</code><span>一格一格看，i 從 0 數到 19。</span></div>
+    <div><code>      if (now[i] != last[i])</code><span>這一格跟上一次不一樣嗎？</span></div>
+    <div><code>        Console.WriteLine($"{30001 + i} 變了：{last[i]} → {now[i]}");</code><span>印出「30003 變了：4120 → 13824」。<br><span class="muted">第 i 格的櫃號＝30001 加 i</span></span></div>
+    <div><code>  last = now;</code><span>這一輪讀到的，變成下一輪的「上一次」。</span></div>
+    <div><code>  Thread.Sleep(1000);</code><span>休息 1 秒（1000 毫秒）再讀。</span></div>
+    <div><code>}</code><span></span></div>
+  </div>
+  <p class="muted" style="font-size:14px">要找開關（DI），把讀取那行換成 <code>bool[] now = plc.ReadInputs(1, 0, 20);</code>，其他一樣，請現場按一下按鈕。</p>
+
+  <div class="rhyme">
+    <span class="n">找格子口訣</span>
+    <span class="say">不找數字，找會動的格子。</span>
+  </div>
+</section>
+
+<!-- 4. 先對心跳 -->
+<section>
+  <div class="eyebrow">第一格要讀什麼</div>
+  <h2>先對心跳，再對訊號</h2>
+  <p>心跳計數器（<span class="mono">40002</span>）每秒自己加 1，不用請任何人去現場按東西，是最好的第一個測試。它一次幫你確認三件事：</p>
+  <div class="tbl panel"><table>
+    <thead><tr><th>你讀 40002（程式填 1）看到</th><th>代表</th></tr></thead>
+    <tbody>
+      <tr><td>1527、1528、1529…每秒加 1</td><td>✓ 網路通、站號對、位址算法對，可以開始對其他訊號</td></tr>
+      <tr><td>數字不動，但讀 40001（填 0）那格在跳</td><td>文件和程式差了一格。之後每一格都要照這個差距調整</td></tr>
+      <tr><td>讀得到，但數字永遠不變</td><td>PLC 可能在 STOP（停止）模式，程式沒在跑</td></tr>
+      <tr><td>等很久才報錯</td><td>IP、Port 或站號不對，回第 5 節第 2 步</td></tr>
+    </tbody>
+  </table></div>
+  <div class="rhyme">
+    <span class="n">開工口訣</span>
+    <span class="say">先對心跳，再對訊號；<br>有出入，回報點位表。</span>
+  </div>
+</section>
+
+<!-- 5. 開工 7 步 -->
+<section>
+  <div class="eyebrow">照順序做</div>
+  <h2>C# 工程師開工 7 步</h2>
+  <div class="steps">
+    <div class="step"><div class="rail2"><div class="dot">1</div><div class="ln"></div></div><div class="bd">
+      <h3>先拿文件</h3>
+      <p>跟 PLC 工程師要：點位表（含版本日期）、PLC 的 IP、Port（Modbus TCP 通常是 502）、站號、每一格的型別和範圍。</p>
+      <span class="ok">手上有點位表，而且確認是最新版。</span></div></div>
+    <div class="step"><div class="rail2"><div class="dot">2</div><div class="ln"></div></div><div class="bd">
+      <h3>先通</h3>
+      <p>終端機打 <code>ping 192.168.0.10</code>，再打 <code>nc -vz 192.168.0.10 502</code>。</p>
+      <span class="ok">看到 succeeded。</span></div></div>
+    <div class="step"><div class="rail2"><div class="dot">3</div><div class="ln"></div></div><div class="bd">
+      <h3>用測試工具讀心跳</h3>
+      <p>照畫面 D 填好 IP、站號，讀 4 號櫃、位址 1（就是 40002）。</p>
+      <span class="ok">數字每秒加 1。</span></div></div>
+    <div class="step"><div class="rail2"><div class="dot">4</div><div class="ln"></div></div><div class="bd">
+      <h3>點對點測試</h3>
+      <p>拿著點位表，請現場一個一個動，看是不是點位表寫的那一格在變。不一樣的地方記下來。</p>
+      <span class="ok">每一格都打勾，或記下差異。</span></div></div>
+    <div class="step"><div class="rail2"><div class="dot">5</div><div class="ln"></div></div><div class="bd">
+      <h3>寫最小的 C# 程式</h3>
+      <p>只讀心跳一格，印出來。見第 6 節。</p>
+      <span class="ok">C# 印出的心跳，和工具看到的一樣。</span></div></div>
+    <div class="step"><div class="rail2"><div class="dot">6</div><div class="ln"></div></div><div class="bd">
+      <h3>點位表變成設定檔</h3>
+      <p>把點位表寫成 JSON 檔，程式照檔案讀。PLC 改了，只改檔案，不用改程式。見第 7 節。</p>
+      <span class="ok">改 JSON 裡的櫃號，不用重新編譯就讀到新位置。</span></div></div>
+    <div class="step"><div class="rail2"><div class="dot">7</div></div><div class="bd">
+      <h3>回報差異</h3>
+      <p>第 4 步記下的不一致，整理給 PLC 工程師，請他更新點位表版本。範本在第 9 節。</p>
+      <span class="ok">拿到新版點位表。</span></div></div>
+  </div>
+</section>
+
+<!-- 6. 最小 C# 程式 -->
+<section>
+  <div class="eyebrow">第 5 步的程式</div>
+  <h2>最小的 C# 程式：讀心跳</h2>
+  <p>先在專案裡裝 NModbus 套件：<code>dotnet add package NModbus</code>。下面每一行右邊都有白話說明。</p>
+  <div class="lbl">
+    <div class="sub">準備</div>
+    <div><code>using System.Net.Sockets;</code><span>要用「網路連線」的工具。</span></div>
+    <div><code>using NModbus;</code><span>要用 NModbus 這個套件（它懂 Modbus 怎麼講話）。</span></div>
+    <div class="sub">連線</div>
+    <div><code>using var tcp = new TcpClient("192.168.0.10", 502);</code><span>連到 PLC 的 IP 和 502 號門。<br><span class="muted">using var＝程式結束時自動把連線關掉</span></span></div>
+    <div><code>var plc = new ModbusFactory().CreateMaster(tcp);</code><span>建立一個「主站」，之後都用 plc 這個名字來讀寫。<br><span class="muted">主站＝發問的一方（你）；PLC 是回答的一方</span></span></div>
+    <div><code>plc.Transport.ReadTimeout = 1000;</code><span>問了 1 秒沒回答就放棄，不要一直傻等。</span></div>
+    <div class="sub">讀心跳，出錯時說清楚是哪種錯</div>
+    <div><code>try</code><span>試著做下面的事，出錯了跳到 catch。</span></div>
+    <div><code>{</code><span></span></div>
+    <div><code>  ushort hb = plc.ReadHoldingRegisters(1, 1, 1)[0];</code><span>讀 1 號 PLC、4 號櫃、位址 1（40002），讀 1 格，拿第一個。</span></div>
+    <div><code>  Console.WriteLine($"心跳 {hb}");</code><span>印出「心跳 1529」。</span></div>
+    <div><code>}</code><span></span></div>
+    <div><code>catch (SlaveException ex)</code><span>PLC 有回答，但說「不行」。最常見是例外碼 2：這一格不存在（位址或櫃子種類錯）。</span></div>
+    <div><code>{</code><span></span></div>
+    <div><code>  Console.WriteLine($"PLC 說不行，例外碼 {ex.SlaveExceptionCode}");</code><span>把例外碼印出來，回報時用得到。</span></div>
+    <div><code>}</code><span></span></div>
+    <div><code>catch (Exception ex)</code><span>根本沒回答：IP、Port、站號或網路有問題。</span></div>
+    <div><code>{</code><span></span></div>
+    <div><code>  Console.WriteLine($"連不上或沒回應：{ex.Message}");</code><span>印出錯誤原因。</span></div>
+    <div><code>}</code><span></span></div>
+  </div>
+</section>
+
+<!-- 7. 點位表設定檔 -->
+<section>
+  <div class="eyebrow">第 6 步的程式</div>
+  <h2>點位表寫成設定檔，不寫死在程式裡</h2>
+  <p>PLC 改了位址，只要改這個檔案。檔名叫 <code>points.json</code>：</p>
+<pre class="code">[
+  { "name": "WaterLevel", "label": "水位",   "address": 30003, "max": 50,   "unit": "cm"  },
+  { "name": "DrumSpeed",  "label": "轉速",   "address": 40001, "max": 1200, "unit": "rpm" },
+  { "name": "Heartbeat",  "label": "心跳",   "address": 40002, "max": 0,    "unit": ""    }
+]</pre>
+  <div class="lbl">
+    <div class="sub">C# 讀設定檔，照檔案去讀 PLC（接在第 6 節的連線後面）</div>
+    <div><code>using System.Text.Json;</code><span>要用讀 JSON 的工具（放在檔案最上面）。</span></div>
+    <div><code>record Point(string Name, string Label, int Address, double Max, string Unit);</code><span>定義「一個點」長什麼樣子，對應 JSON 的每一筆。<br><span class="muted">record＝只用來裝資料的簡單型別</span></span></div>
+    <div><code>var opt = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };</code><span>讀 JSON 時不分大小寫（name 和 Name 當成一樣）。</span></div>
+    <div><code>var points = JsonSerializer.Deserialize&lt;List&lt;Point&gt;&gt;(File.ReadAllText("points.json"), opt);</code><span>把 points.json 讀進來，變成一串「點」。</span></div>
+    <div><code>foreach (var p in points)</code><span>一個點一個點處理。</span></div>
+    <div><code>{</code><span></span></div>
+    <div><code>  int kind = p.Address / 10000;</code><span>櫃號的第 1 位＝哪一種櫃子。30003 / 10000 ＝ 3。<br><span class="muted">整數相除，小數丟掉，這裡正好用得到</span></span></div>
+    <div><code>  ushort index = (ushort)(p.Address % 10000 - 1);</code><span>後 4 位＝第幾格，再減 1（程式從 0 數）。30003 → 3 → 2。<br><span class="muted">%＝取餘數：30003 除以 10000，餘 3</span></span></div>
+    <div><code>  ushort raw = kind == 3</code><span>如果是 3 號櫃……</span></div>
+    <div><code>      ? plc.ReadInputRegisters(1, index, 1)[0]</code><span>……用讀 3 號櫃的方法，</span></div>
+    <div><code>      : plc.ReadHoldingRegisters(1, index, 1)[0];</code><span>否則用讀 4 號櫃的方法。<br><span class="muted">? : ＝「如果……就……否則……」的簡寫</span></span></div>
+    <div><code>  double value = p.Max &gt; 0 ? raw / 27648.0 * p.Max : raw;</code><span>有最高值就用兩把尺換算；心跳這種沒有的，直接用原始數字。</span></div>
+    <div><code>  Console.WriteLine($"{p.Label} {value:0.0} {p.Unit}");</code><span>印出「水位 25.0 cm」。<br><span class="muted">:0.0＝顯示到小數點後 1 位</span></span></div>
+    <div><code>}</code><span></span></div>
+  </div>
+</section>
+
+<!-- 8. 症狀對照 -->
+<section>
+  <div class="eyebrow">讀到怪數字時</div>
+  <h2>看症狀，猜原因</h2>
+  <div class="panel tbl"><table>
+    <thead><tr><th>你看到</th><th>可能原因</th><th>怎麼確認</th></tr></thead>
+    <tbody>
+      <tr><td>一直是 0</td><td>讀錯格子，或這格根本沒用到</td><td>請現場動一下，用掃描程式看哪格在變</td></tr>
+      <tr><td>是隔壁格的值</td><td>位址差一格</td><td>先對心跳，看差幾格</td></tr>
+      <tr><td class="mono">65535</td><td>其實是 −1（有正負號的數字，被當成沒有正負號讀）</td><td>改用 <code>(short)raw</code> 看看是不是 −1</td></tr>
+      <tr><td class="mono">32767</td><td>超出範圍或斷線（西門子類比模組常見）</td><td>量電流、看模組燈號、問 PLC 工程師</td></tr>
+      <tr><td>很大的怪數字，旁邊一格也一起變</td><td>一個小數佔兩格</td><td>兩格合併讀，順序對調試試</td></tr>
+      <tr><td>會動，但換算差一倍</td><td>範圍規格錯</td><td>對感測器規格書的最高、最低值</td></tr>
+      <tr><td>到不了 27648，最高停在一半左右</td><td>模組量程設錯（畫面 A）</td><td>請 PLC 工程師看通道設定</td></tr>
+      <tr><td>例外碼 2</td><td>這一格不存在</td><td>櫃子種類或位址錯</td></tr>
+      <tr><td>等很久才報錯</td><td>IP、Port、站號、網路</td><td>ping、nc，再問站號</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- 9. 回報範本 -->
+<section>
+  <div class="eyebrow">第 7 步</div>
+  <h2>回報給 PLC 工程師的範本</h2>
+  <p>寫清楚「文件寫什麼、實際看到什麼、怎麼測的」，對方一看就知道要查哪裡，也不會覺得被指責。</p>
+  <div class="copybox">
+    <textarea id="report" aria-label="回報範本，可以修改後複製">您好，我在核對「洗衣機 2 號」的點位表（版本 2026-10-20），有兩個地方和實際對不上：
+
+1. 點位表寫「水位 30001」，但現場加水時，30001 一直是 0，實際在動的是 30003。
+2. 點位表寫「開始鍵 10001」，按下時 10001 沒變，10002 變成 1。
+
+測試方式：Modbus TCP，192.168.0.10:502，站號 1，每秒讀一次，心跳 40002 正常在跳。
+
+麻煩幫忙確認 PLC 的 Modbus 對照設定，並更新點位表版本，謝謝！</textarea>
+    <button type="button" id="copyBtn">複製範本</button>
+    <span id="copyMsg" class="muted" style="font-size:14px" aria-live="polite"></span>
+  </div>
+</section>
+
+</div>
+
+<script>
+(function () {
+  var btn = document.getElementById('copyBtn'), box = document.getElementById('report'), msg = document.getElementById('copyMsg');
+  btn.addEventListener('click', function () {
+    var done = function () { msg.textContent = '已複製，可以貼到訊息或信件裡。'; };
+    var fallback = function () { box.focus(); box.select(); msg.textContent = '已選取文字，請按 Ctrl+C（Mac 按 ⌘+C）複製。'; };
+    try {
+      navigator.clipboard.writeText(box.value).then(done, fallback);
+    } catch (e) { fallback(); }
+  });
+})();
+</script>
